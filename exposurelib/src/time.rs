@@ -1,19 +1,27 @@
 use chrono::prelude::*;
+use serde::{Deserialize, Serialize};
 
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct ExposureTime {
     en_interval_number: u32,
 }
 
 impl ExposureTime {
-    pub fn en_interval_number(&self) -> u32 {
+    pub fn as_number(&self) -> u32 {
         self.en_interval_number
+    }
+    pub fn as_bytes(&self) -> [u8; std::mem::size_of::<u32>()] {
+        self.en_interval_number.to_le_bytes()
+    }
+    pub fn en_interval_number(utc: DateTime<Utc>) -> u32 {
+        (utc.timestamp() / (60 * 10)) as u32
     }
 }
 
 impl From<DateTime<Utc>> for ExposureTime {
     fn from(utc: DateTime<Utc>) -> Self {
         Self {
-            en_interval_number: (utc.timestamp() / (60 * 10)) as u32,
+            en_interval_number: Self::en_interval_number(utc),
         }
     }
 }
@@ -49,21 +57,21 @@ mod tests {
     #[test]
     fn test_exposure_time_creation() {
         let exposure_time: ExposureTime = Utc.timestamp(0, 0).into();
-        assert_eq!(exposure_time.en_interval_number(), 0);
+        assert_eq!(exposure_time.as_number(), 0);
         let exposure_time: ExposureTime = Utc.timestamp(10 * 60, 0).into();
-        assert_eq!(exposure_time.en_interval_number(), 1);
+        assert_eq!(exposure_time.as_number(), 1);
         let exposure_time: ExposureTime = Utc.timestamp(9 * 60, 999).into();
-        assert_eq!(exposure_time.en_interval_number(), 0);
+        assert_eq!(exposure_time.as_number(), 0);
         let exposure_time: ExposureTime = Utc.ymd(1970, 1, 1).and_hms(0, 0, 0).into();
-        assert_eq!(exposure_time.en_interval_number(), 0);
+        assert_eq!(exposure_time.as_number(), 0);
         let exposure_time: ExposureTime = Utc.ymd(1970, 1, 2).and_hms(0, 0, 0).into();
-        assert_eq!(exposure_time.en_interval_number(), 24 * 60 / 10);
+        assert_eq!(exposure_time.as_number(), 24 * 60 / 10);
         let exposure_time: ExposureTime = Utc.ymd(1970, 1, 2).and_hms(0, 2, 0).into();
-        assert_eq!(exposure_time.en_interval_number(), 24 * 60 / 10);
+        assert_eq!(exposure_time.as_number(), 24 * 60 / 10);
         let exposure_time: ExposureTime = Utc.ymd(1970, 1, 2).and_hms(0, 9, 59).into();
-        assert_eq!(exposure_time.en_interval_number(), 24 * 60 / 10);
+        assert_eq!(exposure_time.as_number(), 24 * 60 / 10);
         let exposure_time: ExposureTime = Utc.ymd(1970, 1, 2).and_hms(0, 10, 0).into();
-        assert_eq!(exposure_time.en_interval_number(), 24 * 60 / 10 + 1);
+        assert_eq!(exposure_time.as_number(), 24 * 60 / 10 + 1);
     }
 
     #[test]
