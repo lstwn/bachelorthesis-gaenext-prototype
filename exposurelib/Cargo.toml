@@ -8,6 +8,9 @@ edition = "2018"
 
 [dependencies]
 chrono = "0.4.19"
+log = "0.4.14"
+fern = { version = "0.6.0", features = ["colored"] }
+clap = "2.33.3"
 serde = { version = "1.0", features = ["derive"] }
 ring = "0.16.20"
 aes = "0.6.0"

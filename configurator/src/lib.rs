@@ -8,14 +8,14 @@ use std::hash;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Participant {
     pub name: String,
-    pub infected: bool,
+    pub positively_tested: bool,
 }
 
 impl Participant {
     pub fn new<T: Into<String>>(name: T, infected: bool) -> Self {
         Participant {
             name: name.into(),
-            infected,
+            positively_tested: infected,
         }
     }
 }

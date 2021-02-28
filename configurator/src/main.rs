@@ -5,8 +5,10 @@ use petgraph::dot::Dot;
 use petgraph::graph::Graph;
 use petgraph::visit::IntoNodeReferences;
 use std::collections::HashMap;
+use exposurelib::args::{Args, crate_name, crate_version, crate_authors, crate_description};
 
 fn main() {
+    let args = Args::new(crate_name!(), crate_version!(), crate_authors!(), crate_description!());
     let mut graph = Graph::<Participant, Encounters>::new();
 
     let p1 = graph.add_node(Participant::new("p1", true));
