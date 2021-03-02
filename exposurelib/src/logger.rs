@@ -1,6 +1,7 @@
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::Dispatch;
 use std::path::Path;
+pub use log::{error, warn, info, debug, trace};
 
 pub fn setup_logger<P: AsRef<Path>>(log_file_path: P, log_level: log::LevelFilter) {
     let colors = ColoredLevelConfig::new()
@@ -34,11 +35,11 @@ pub fn setup_logger<P: AsRef<Path>>(log_file_path: P, log_level: log::LevelFilte
                 message = message,
             ))
         })
-        .chain(fern::log_file(log_file_path).expect("Could not open log file path."));
+        .chain(fern::log_file(log_file_path).expect("Could not open log file path"));
 
     base_config
         .chain(stderr_config)
         .chain(file_config)
         .apply()
-        .expect("Could not initialize logger.");
+        .expect("Could not initialize logger");
 }

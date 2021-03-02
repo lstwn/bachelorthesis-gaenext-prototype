@@ -1,5 +1,5 @@
 [package]
-name = "bachelorthesis-prototype-configurator"
+name = "configurator"
 version = "0.1.0"
 authors = ["Leo <lstwn@mailbox.org>"]
 edition = "2018"
@@ -8,8 +8,8 @@ edition = "2018"
 
 [dependencies]
 exposurelib = { path = "../exposurelib" }
+clap = "2.33.3"
 chrono = { version = "0.4.19", features = ["serde"] }
-serde_json = "1.0.61"
 serde_yaml = "0.8.16"
-serde = { version = "1.0.123", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
 petgraph = { version = "0.5.1", features = [ "serde-1" ] }

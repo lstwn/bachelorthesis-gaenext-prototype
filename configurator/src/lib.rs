@@ -8,15 +8,19 @@ use std::hash;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Participant {
     pub name: String,
+    #[serde(default = "Participant::default_positively_tested")]
     pub positively_tested: bool,
 }
 
 impl Participant {
-    pub fn new<T: Into<String>>(name: T, infected: bool) -> Self {
+    pub fn new<T: Into<String>>(name: T, positively_tested: bool) -> Self {
         Participant {
             name: name.into(),
-            positively_tested: infected,
+            positively_tested,
         }
+    }
+    fn default_positively_tested() -> bool {
+        false
     }
 }
 

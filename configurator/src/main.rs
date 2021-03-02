@@ -1,42 +1,38 @@
 mod lib;
+mod args;
+mod config;
 use chrono::prelude::*;
 use lib::{ClientConfig, Encounter, Encounters, Intensity, Participant};
 use petgraph::dot::Dot;
 use petgraph::graph::Graph;
 use petgraph::visit::IntoNodeReferences;
 use std::collections::HashMap;
-use exposurelib::args::{Args, crate_name, crate_version, crate_authors, crate_description};
+use args::{Args, GenerateConfigsArgs, EmitDefaultConfigArgs};
+use config::Config;
+use std::fs;
 
-fn main() {
-    let args = Args::new(crate_name!(), crate_version!(), crate_authors!(), crate_description!());
-    let mut graph = Graph::<Participant, Encounters>::new();
+type IoResult = std::io::Result<()>;
 
-    let p1 = graph.add_node(Participant::new("p1", true));
-    let p2 = graph.add_node(Participant::new("p2", false));
-    let p3 = graph.add_node(Participant::new("p3", false));
+fn main() -> IoResult {
+    let args = Args::new();
 
-    graph.add_edge(
-        p1,
-        p2,
-        Encounters::new(vec![
-            Encounter::new(Utc.ymd(2021, 2, 4).and_hms(15, 44, 0), Intensity::HighRisk),
-            Encounter::new(Utc.ymd(2021, 2, 4).and_hms(14, 44, 0), Intensity::LowRisk),
-        ]),
-    );
-    graph.add_edge(
-        p2,
-        p3,
-        Encounters::new(vec![
-            Encounter::new(Utc.ymd(2021, 2, 4).and_hms(15, 44, 0), Intensity::HighRisk),
-            Encounter::new(Utc.ymd(2021, 2, 4).and_hms(13, 44, 0), Intensity::LowRisk),
-        ]),
-    );
+    match args {
+        Args::EmitDefaultConfig(args) => handle_emit_default_config(args),
+        Args::GenerateConfigs(args) => handle_generate_configs(args),
+    }
+}
 
-    let serialized_graph = serde_yaml::to_string(&graph).unwrap();
+fn handle_emit_default_config(args: EmitDefaultConfigArgs) -> IoResult {
+    let config = Config::default();
+    let config = serde_yaml::to_string(&config).unwrap();
+    fs::write(args.config_file_path, config)?;
+    Ok(())
+}
 
-    println!("{}", serialized_graph);
-
-    let graph: Graph<Participant, Encounters> = serde_yaml::from_str(&serialized_graph).unwrap();
+fn handle_generate_configs(args: GenerateConfigsArgs) -> IoResult {
+    let config = fs::read_to_string(args.config_file_path)?;
+    let config: Config = serde_yaml::from_str(&config).unwrap();
+    let graph = config.social_graph;
 
     let client_configs: Vec<ClientConfig> = graph
         .node_references()
@@ -59,6 +55,7 @@ fn main() {
         .collect();
 
     println!("{}", serde_yaml::to_string(&client_configs).unwrap());
+    Ok(())
 
     // println!("{}", Dot::new(&graph));
 }
