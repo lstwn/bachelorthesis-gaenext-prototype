@@ -1,19 +1,19 @@
-mod lib;
 mod args;
 mod config;
+mod lib;
+use anyhow::{Context, Result};
+use args::{Args, EmitDefaultConfigArgs, GenerateConfigsArgs};
 use chrono::prelude::*;
+use config::Config;
 use lib::{ClientConfig, Encounter, Encounters, Intensity, Participant};
 use petgraph::dot::Dot;
 use petgraph::graph::Graph;
 use petgraph::visit::IntoNodeReferences;
 use std::collections::HashMap;
-use args::{Args, GenerateConfigsArgs, EmitDefaultConfigArgs};
-use config::Config;
 use std::fs;
+use std::path::PathBuf;
 
-type IoResult = std::io::Result<()>;
-
-fn main() -> IoResult {
+fn main() -> Result<()> {
     let args = Args::new();
 
     match args {
@@ -22,16 +22,25 @@ fn main() -> IoResult {
     }
 }
 
-fn handle_emit_default_config(args: EmitDefaultConfigArgs) -> IoResult {
+fn handle_emit_default_config(args: EmitDefaultConfigArgs) -> Result<()> {
     let config = Config::default();
     let config = serde_yaml::to_string(&config).unwrap();
-    fs::write(args.config_file_path, config)?;
+    fs::write(&args.config_file_path, config).context(format!(
+        "Could not write config to {:?}.",
+        args.config_file_path
+    ))?;
     Ok(())
 }
 
-fn handle_generate_configs(args: GenerateConfigsArgs) -> IoResult {
-    let config = fs::read_to_string(args.config_file_path)?;
-    let config: Config = serde_yaml::from_str(&config).unwrap();
+fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
+    let config = fs::read_to_string(&args.config_file_path).context(format!(
+        "Could not read config from {:?}.",
+        args.config_file_path
+    ))?;
+    let config: Config = serde_yaml::from_str(&config).context(format!(
+        "Could not deserialize config from {:?}. Check config file.",
+        args.config_file_path
+    ))?;
     let graph = config.social_graph;
 
     let client_configs: Vec<ClientConfig> = graph
@@ -55,7 +64,14 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> IoResult {
         .collect();
 
     println!("{}", serde_yaml::to_string(&client_configs).unwrap());
-    Ok(())
 
-    // println!("{}", Dot::new(&graph));
+    let mut dot_graph_file_path = PathBuf::from(&args.config_output_path);
+    dot_graph_file_path.push(&args.config_file_path.file_name().unwrap());
+    dot_graph_file_path.set_extension("dot");
+    fs::write(&dot_graph_file_path, format!("{}", Dot::new(&graph))).context(format!(
+        "Could not write dot graph file to {:?}.",
+        dot_graph_file_path
+    ))?;
+
+    Ok(())
 }

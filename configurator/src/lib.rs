@@ -68,14 +68,14 @@ impl fmt::Display for Encounters {
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub struct Encounter {
-    pub timestamp: DateTime<Utc>,
+    pub time: DateTime<Utc>,
     pub intensity: Intensity,
 }
 
 impl Encounter {
     pub fn new(timestamp: DateTime<Utc>, intensity: Intensity) -> Self {
         Encounter {
-            timestamp,
+            time: timestamp,
             intensity,
         }
     }
@@ -83,7 +83,7 @@ impl Encounter {
 
 impl fmt::Display for Encounter {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {}", self.timestamp, self.intensity)
+        write!(f, "{} {}", self.time, self.intensity)
     }
 }
 

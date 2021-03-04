@@ -32,6 +32,14 @@ impl Default for Config {
         );
         social_graph.add_edge(
             p1,
+            p0,
+            Encounters::new(vec![
+                Encounter::new(Utc.ymd(2021, 2, 4).and_hms(15, 44, 0), Intensity::HighRisk),
+                Encounter::new(Utc.ymd(2021, 2, 4).and_hms(14, 44, 0), Intensity::LowRisk),
+            ]),
+        );
+        social_graph.add_edge(
+            p1,
             p2,
             Encounters::new(vec![
                 Encounter::new(Utc.ymd(2021, 2, 4).and_hms(15, 44, 0), Intensity::HighRisk),

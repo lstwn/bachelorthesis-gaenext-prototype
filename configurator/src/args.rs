@@ -78,7 +78,7 @@ impl Args {
                 })
             }
             None => panic!("Please specify which subcommand to use. See --help for usage."),
-            _ => panic!("Invalid subcommand"),
+            _ => panic!("Invalid subcommand."),
         }
     }
 }
