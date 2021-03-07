@@ -1,21 +1,24 @@
-use crate::lib::{Encounter, Encounters, Intensity, Participant};
+use crate::lib::{Encounter, Encounters, Intensity};
 use chrono::prelude::*;
 use petgraph::graph::Graph;
 use serde::{Deserialize, Serialize};
 use std::default::Default;
+use exposurelib::primitives::{TekRollingPeriod, InfectionPeriod};
+use exposurelib::config::{Participant, SystemParams};
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub host: String,
     pub base_port: u16,
+    pub system_params: SystemParams,
+    pub today: DateTime<Utc>,
+    /// All dates specified in the graph sould be within
+    /// ]today - tek_rolling_period * infection_period; today]
     pub social_graph: Graph<Participant, Encounters>,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        let host = String::from("127.0.0.1");
-        let base_port = 9000;
-
         let mut social_graph = Graph::<Participant, Encounters>::new();
 
         let p0 = social_graph.add_node(Participant::new("p0", true));
@@ -48,8 +51,10 @@ impl Default for Config {
         );
 
         Config {
-            host,
-            base_port,
+            host: String::from("127.0.0.1"),
+            base_port: 9000,
+            system_params: SystemParams::default(),
+            today: Utc.ymd(2021, 3, 14).and_hms(0, 0, 0),
             social_graph,
         }
     }

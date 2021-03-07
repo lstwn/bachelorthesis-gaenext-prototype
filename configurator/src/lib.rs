@@ -101,8 +101,8 @@ impl fmt::Display for Intensity {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ClientConfig {
-    participant: Participant,
-    encounters: HashMap<Participant, Encounters>,
+    pub participant: Participant,
+    pub encounters: HashMap<Participant, Encounters>,
 }
 
 impl ClientConfig {
@@ -111,5 +111,8 @@ impl ClientConfig {
             participant,
             encounters,
         }
+    }
+    pub fn name(&self) -> &str {
+        &self.participant.name
     }
 }

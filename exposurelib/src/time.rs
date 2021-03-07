@@ -1,7 +1,7 @@
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ExposureTime {
     en_interval_number: u32,
 }
@@ -15,6 +15,12 @@ impl ExposureTime {
     }
     pub fn en_interval_number(utc: DateTime<Utc>) -> u32 {
         (utc.timestamp() / (60 * 10)) as u32
+    }
+}
+
+impl From<u32> for ExposureTime {
+    fn from(en_interval_number: u32) -> Self {
+        Self { en_interval_number }
     }
 }
 
@@ -46,8 +52,9 @@ impl Ord for ExposureTime {
     }
 }
 
-// Do I really need this? I'd rather go for a non-continouos time range..
-pub struct ExposureTimeRange {}
+pub struct DiscreteExposureTimeInterval {}
+
+pub struct ContinuousExposureTimeInterval {}
 
 #[cfg(test)]
 mod tests {
