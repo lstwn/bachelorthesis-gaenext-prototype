@@ -49,25 +49,24 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
     let host: IpAddr = config.host.parse()?;
     let mut port: u16 = config.base_port;
 
-    let client_configs: Vec<ClientConfig> = graph
-        .node_references()
-        .map(|(node_index, participant)| {
-            let endpoint = SocketAddr::new(host, port.clone());
-            port = port + 1;
-            ClientConfig {
-                participant: participant.clone(),
-                endpoint,
-                params: config.system_params,
-                state: ClientState::new(
-                    config.today,
-                    config.system_params.tek_rolling_period,
-                    config.system_params.infection_period,
-                    &secure_random,
-                ).unwrap(),
-                // TODO: no unwrap here!
-            }
-        })
-        .collect();
+    let mut client_configs: HashMap<&Participant, ClientConfig> =
+        HashMap::with_capacity(graph.node_references().count());
+    for (_, participant) in graph.node_references() {
+        let endpoint = SocketAddr::new(host, port.clone());
+        port = port + 1;
+        let state = ClientState::new(
+            config.today,
+            config.system_params.tek_rolling_period,
+            config.system_params.infection_period,
+            &secure_random,
+        )?;
+        client_configs.insert(participant, ClientConfig {
+            participant: participant.clone(),
+            endpoint,
+            params: config.system_params,
+            state,
+        });
+    }
     // let client_configs: Vec<ClientConfig> = graph
     //     .node_references()
     //     .map(|(node_index, participant)| {
@@ -85,7 +84,7 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
     //     })
     //     .collect();
 
-    for client_config in client_configs.iter() {
+    for client_config in client_configs.values() {
         let mut client_config_file_path = PathBuf::from(&args.config_output_path);
         client_config_file_path.push(client_config.name());
         client_config_file_path.set_extension("yaml");
