@@ -1,13 +1,14 @@
 mod args;
 mod config;
-mod lib;
+mod error;
+use crate::error::InvalidConfigError;
 use anyhow::{Context, Result};
 use args::{Args, EmitDefaultConfigArgs, GenerateConfigsArgs};
+use chrono::Duration;
 use config::Config;
-use exposurelib::client_state::ClientState;
+use exposurelib::client_state::{BluetoothLayer, ClientState, Keys, TracedContact};
 use exposurelib::config::{ClientConfig, Participant};
 use exposurelib::primitives::SystemRandom;
-use lib::{Encounter, Encounters, Intensity};
 use petgraph::dot::Dot;
 use petgraph::visit::IntoNodeReferences;
 use std::collections::HashMap;
@@ -46,45 +47,73 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
     let graph = &config.social_graph;
 
     let secure_random = SystemRandom::new();
+
+    let participant_count = graph.node_references().count();
+
+    let mut client_keys: HashMap<&Participant, Keys> = HashMap::with_capacity(participant_count);
+    let mut client_bluetooth_layers: HashMap<&Participant, BluetoothLayer> =
+        HashMap::with_capacity(participant_count);
+    for (_, participant) in graph.node_references() {
+        client_keys.insert(
+            participant,
+            Keys::new(
+                config.today,
+                config.system_params.tek_rolling_period,
+                config.system_params.infection_period,
+                &secure_random,
+            )?,
+        );
+        client_bluetooth_layers.insert(participant, BluetoothLayer::new());
+    }
+
+    let tekrp = config.system_params.tek_rolling_period;
+    for (node_index, participant) in graph.node_references() {
+        for other_node_index in graph.neighbors(node_index) {
+            let other_participant = graph.node_weight(other_node_index).unwrap();
+            let edge_index = graph.find_edge(node_index, other_node_index).unwrap();
+            let encounters = graph.edge_weight(edge_index).unwrap();
+            for encounter in encounters.encounters.iter() {
+                let rpi = client_keys
+                    .get(&participant)
+                    .unwrap()
+                    .rpi(encounter.time.into(), tekrp)
+                    .ok_or(InvalidConfigError::EncounterOutOfBounds {
+                        from: participant.clone(),
+                        to: other_participant.clone(),
+                        at: encounter.time,
+                        lower: config.today
+                            - config.system_params.infection_period.as_duration(tekrp)
+                            + Duration::from(tekrp),
+                        upper: config.today + Duration::from(tekrp),
+                    })
+                    .context("Invalid config")?;
+                let traced_contact = TracedContact::new(encounter.time, rpi);
+                client_bluetooth_layers
+                    .get_mut(&other_participant)
+                    .unwrap()
+                    .add(traced_contact, tekrp)
+            }
+        }
+    }
+
     let host: IpAddr = config.host.parse()?;
     let mut port: u16 = config.base_port;
 
-    let mut client_configs: HashMap<&Participant, ClientConfig> =
-        HashMap::with_capacity(graph.node_references().count());
-    for (_, participant) in graph.node_references() {
-        let endpoint = SocketAddr::new(host, port.clone());
-        port = port + 1;
-        let state = ClientState::new(
-            config.today,
-            config.system_params.tek_rolling_period,
-            config.system_params.infection_period,
-            &secure_random,
-        )?;
-        client_configs.insert(participant, ClientConfig {
-            participant: participant.clone(),
-            endpoint,
-            params: config.system_params,
-            state,
-        });
-    }
-    // let client_configs: Vec<ClientConfig> = graph
-    //     .node_references()
-    //     .map(|(node_index, participant)| {
-    //         let participant = participant.clone();
-    //         let encounters: HashMap<Participant, Encounters> = graph
-    //             .neighbors(node_index)
-    //             .map(|other_node_index| {
-    //                 let other_participant = graph.node_weight(other_node_index).unwrap();
-    //                 let edge_index = graph.find_edge(node_index, other_node_index).unwrap();
-    //                 let encounters = graph.edge_weight(edge_index).unwrap();
-    //                 (other_participant.clone(), encounters.clone())
-    //             })
-    //             .collect();
-    //         ClientConfig::new(participant, encounters)
-    //     })
-    //     .collect();
+    let client_configs: Vec<ClientConfig> = graph
+        .node_references()
+        .map(|(_, participant)| {
+            let participant = participant.clone();
+            let endpoint = SocketAddr::new(host, port.clone());
+            port = port + 1;
+            let state = ClientState::new(
+                client_keys.remove(&participant).unwrap(),
+                client_bluetooth_layers.remove(&participant).unwrap(),
+            );
+            ClientConfig::new(participant, endpoint, config.system_params, state)
+        })
+        .collect();
 
-    for client_config in client_configs.values() {
+    for client_config in client_configs.iter() {
         let mut client_config_file_path = PathBuf::from(&args.config_output_path);
         client_config_file_path.push(client_config.name());
         client_config_file_path.set_extension("yaml");

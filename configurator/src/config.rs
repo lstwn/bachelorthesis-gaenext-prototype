@@ -1,10 +1,8 @@
-use crate::lib::{Encounter, Encounters, Intensity};
 use chrono::prelude::*;
 use petgraph::graph::Graph;
 use serde::{Deserialize, Serialize};
 use std::default::Default;
-use exposurelib::primitives::{TekRollingPeriod, InfectionPeriod};
-use exposurelib::config::{Participant, SystemParams};
+use exposurelib::config::{Encounter, Encounters, Intensity, Participant, SystemParams};
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
@@ -13,7 +11,7 @@ pub struct Config {
     pub system_params: SystemParams,
     pub today: DateTime<Utc>,
     /// All dates specified in the graph sould be within
-    /// ]today - tek_rolling_period * infection_period; today]
+    /// [today - tek_rolling_period * infection_period; today + tek_rolling_period[
     pub social_graph: Graph<Participant, Encounters>,
 }
 
@@ -29,24 +27,24 @@ impl Default for Config {
             p0,
             p1,
             Encounters::new(vec![
-                Encounter::new(Utc.ymd(2021, 2, 4).and_hms(15, 44, 0), Intensity::HighRisk),
-                Encounter::new(Utc.ymd(2021, 2, 4).and_hms(14, 44, 0), Intensity::LowRisk),
+                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(15, 44, 0), Intensity::HighRisk),
+                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(14, 44, 0), Intensity::LowRisk),
             ]),
         );
         social_graph.add_edge(
             p1,
             p0,
             Encounters::new(vec![
-                Encounter::new(Utc.ymd(2021, 2, 4).and_hms(15, 44, 0), Intensity::HighRisk),
-                Encounter::new(Utc.ymd(2021, 2, 4).and_hms(14, 44, 0), Intensity::LowRisk),
+                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(15, 44, 0), Intensity::HighRisk),
+                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(14, 44, 0), Intensity::LowRisk),
             ]),
         );
         social_graph.add_edge(
             p1,
             p2,
             Encounters::new(vec![
-                Encounter::new(Utc.ymd(2021, 2, 4).and_hms(15, 44, 0), Intensity::HighRisk),
-                Encounter::new(Utc.ymd(2021, 2, 4).and_hms(13, 44, 0), Intensity::LowRisk),
+                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(15, 44, 0), Intensity::HighRisk),
+                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(13, 44, 0), Intensity::LowRisk),
             ]),
         );
 

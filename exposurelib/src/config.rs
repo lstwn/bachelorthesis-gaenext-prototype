@@ -1,11 +1,11 @@
-use serde::{Serialize, Deserialize};
-use std::net::SocketAddr;
-use std::fmt;
-use std::hash;
-use std::cmp;
-use chrono::prelude::*;
 use crate::client_state::ClientState;
 use crate::primitives::*;
+use chrono::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::cmp;
+use std::fmt;
+use std::hash;
+use std::net::SocketAddr;
 
 #[derive(Serialize, Deserialize)]
 pub struct DiagnosisServerConfig {
@@ -120,10 +120,22 @@ pub struct ClientConfig {
     #[serde(flatten)]
     pub params: SystemParams,
     pub state: ClientState,
-    // TODO: bluetooth
 }
 
 impl ClientConfig {
+    pub fn new(
+        participant: Participant,
+        endpoint: SocketAddr,
+        params: SystemParams,
+        state: ClientState,
+    ) -> Self {
+        Self {
+            participant,
+            endpoint,
+            params,
+            state,
+        }
+    }
     pub fn name(&self) -> &str {
         &self.participant.name
     }

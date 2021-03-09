@@ -2,14 +2,13 @@ use super::time::ExposureTime;
 use crate::error::ExposurelibError;
 use aes::cipher::generic_array::GenericArray;
 use aes::{Aes128, BlockCipher, NewBlockCipher};
-use chrono::prelude::*;
 use chrono::Duration;
 use ring::hkdf::Salt;
 use ring::hkdf::HKDF_SHA256;
 use ring::rand::SecureRandom;
 pub use ring::rand::SystemRandom;
 use serde::{Deserialize, Serialize};
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 
 #[derive(Serialize, Deserialize)]
 pub struct KeyForward {
@@ -27,39 +26,90 @@ pub struct KeyUpload {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ExposureKeys {
+pub struct Validity<Keyring> {
     valid_from: ExposureTime,
+    keyring: Keyring,
+}
+
+impl<Keyring> Validity<Keyring> {
+    pub fn new(exposure_time: ExposureTime, tekrp: TekRollingPeriod, keyring: Keyring) -> Self {
+        Self {
+            valid_from: exposure_time.floor_tekrp_multiple(tekrp),
+            keyring,
+        }
+    }
+    pub fn keyring(&self) -> &Keyring {
+        &self.keyring
+    }
+    pub fn query(&self, exposure_time: ExposureTime, tekrp: TekRollingPeriod) -> Option<&Keyring> {
+        if exposure_time.floor_tekrp_multiple(tekrp) == self.valid_from {
+            Some(&self.keyring)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TekKeyring {
     tek: TemporaryExposureKey,
     rpik: RollingProximityIdentifierKey,
     aemk: AssociatedEncryptedMetadataKey,
+}
+
+impl TekKeyring {
+    pub fn rpi(&self, at: ExposureTime) -> RollingProximityIdentifier {
+        RollingProximityIdentifier::new(&self.rpik, at)
+    }
+}
+
+impl TryFrom<TemporaryExposureKey> for TekKeyring {
+    type Error = ExposurelibError;
+
+    fn try_from(tek: TemporaryExposureKey) -> Result<Self, Self::Error> {
+        Ok(Self {
+            tek,
+            rpik: RollingProximityIdentifierKey::new(&tek)?,
+            aemk: AssociatedEncryptedMetadataKey::new(&tek)?,
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SdKeyring {
     sd: Seed,
     pksk: PublicKeySymmetricKey,
 }
 
-impl ExposureKeys {
-    pub fn new(
-        valid_from: ExposureTime,
-        secure_random: &dyn SecureRandom,
-    ) -> Result<Self, ExposurelibError> {
-        let tek = TemporaryExposureKey::new(secure_random)?;
-        let sd = Seed::new(secure_random)?;
+impl TryFrom<Seed> for SdKeyring {
+    type Error = ExposurelibError;
+
+    fn try_from(sd: Seed) -> Result<Self, Self::Error> {
         Ok(Self {
-            valid_from,
-            tek,
-            rpik: RollingProximityIdentifierKey::new(&tek)?,
-            aemk: AssociatedEncryptedMetadataKey::new(&tek)?,
             sd,
             pksk: PublicKeySymmetricKey::new(&sd)?,
         })
     }
-    pub fn with_timestamp(
-        timestamp: DateTime<Utc>,
-        tekrp: TekRollingPeriod,
-        secure_random: &dyn SecureRandom,
-    ) -> Result<Self, ExposurelibError> {
-        let tekrp: u32 = tekrp.into();
-        let valid_from = ExposureTime::en_interval_number(timestamp) / tekrp * tekrp;
-        Self::new(valid_from.into(), secure_random)
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ExposureKeyring {
+    tek_keyring: TekKeyring,
+    sd_keyring: SdKeyring,
+}
+
+impl ExposureKeyring {
+    pub fn new(secure_random: &dyn SecureRandom) -> Result<Self, ExposurelibError> {
+        Ok(Self {
+            tek_keyring: TekKeyring::try_from(TemporaryExposureKey::new(secure_random)?)?,
+            sd_keyring: SdKeyring::try_from(Seed::new(secure_random)?)?,
+        })
+    }
+    pub fn tek_keyring(&self) -> &TekKeyring {
+        &self.tek_keyring
+    }
+    pub fn sd_keyring(&self) -> &SdKeyring {
+        &self.sd_keyring
     }
 }
 
@@ -91,8 +141,7 @@ pub struct InfectionPeriod(u16);
 
 impl InfectionPeriod {
     pub fn as_duration(&self, tekrp: TekRollingPeriod) -> Duration {
-        let tekrp: Duration = tekrp.into();
-        tekrp * (self.0 as i32)
+        Duration::from(tekrp) * (self.0 as i32)
     }
 }
 
@@ -333,7 +382,7 @@ mod tests {
     #[test]
     fn test_tek_rolling_period() {
         let tekrp = TekRollingPeriod::default();
-        assert_eq!(Duration::hours(24), tekrp.into());
+        assert_eq!(Duration::hours(24), Duration::from(tekrp));
     }
 
     #[test]

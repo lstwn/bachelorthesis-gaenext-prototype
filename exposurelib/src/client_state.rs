@@ -1,32 +1,101 @@
 use crate::error::ExposurelibError;
-use crate::primitives::{ExposureKeys, InfectionPeriod, TekRollingPeriod};
+use crate::primitives::{
+    ExposureKeyring, InfectionPeriod, RollingProximityIdentifier, TekRollingPeriod, Validity,
+};
+use crate::time::ExposureTime;
 use chrono::prelude::*;
 use chrono::Duration;
 use ring::rand::SecureRandom;
-use std::collections::VecDeque;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, VecDeque};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ClientState {
     // sorted after age, i.e. newest in the front, oldest in the back
-    keys: VecDeque<ExposureKeys>,
+    keys: Keys,
+    bluetooth_layer: BluetoothLayer,
 }
 
 impl ClientState {
+    pub fn new(keys: Keys, bluetooth_layer: BluetoothLayer) -> Self {
+        Self { keys, bluetooth_layer }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Keys(VecDeque<Validity<ExposureKeyring>>);
+
+impl Keys {
     pub fn new(
         from: DateTime<Utc>,
         tekrp: TekRollingPeriod,
         infection_period: InfectionPeriod,
         secure_random: &dyn SecureRandom,
     ) -> Result<Self, ExposurelibError> {
-        let mut keys = VecDeque::with_capacity(infection_period.into());
-        let infection_period: i32 = infection_period.into();
-        let tekrp_duration: Duration = tekrp.into();
+        let mut keys = VecDeque::with_capacity(usize::from(infection_period));
+        let infection_period = i32::from(infection_period);
+        let tekrp_duration = Duration::from(tekrp);
         for i in 0..infection_period {
             let distance: Duration = tekrp_duration * i;
             let date = from - distance;
-            keys.push_back(ExposureKeys::with_timestamp(date, tekrp, secure_random)?);
+            let exposure_keyring = ExposureKeyring::new(secure_random)?;
+            keys.push_back(Validity::new(
+                ExposureTime::from(date),
+                tekrp,
+                exposure_keyring,
+            ));
         }
-        Ok(ClientState { keys })
+        Ok(Self(keys))
+    }
+    pub fn rpi(
+        &self,
+        at: ExposureTime,
+        tekrp: TekRollingPeriod,
+    ) -> Option<RollingProximityIdentifier> {
+        match self
+            .keys()
+            .iter()
+            .find_map(|validity| validity.query(at, tekrp))
+        {
+            Some(keyring) => Some(keyring.tek_keyring().rpi(at)),
+            None => None,
+        }
+    }
+    pub fn keys(&self) -> &VecDeque<Validity<ExposureKeyring>> {
+        &self.0
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BluetoothLayer {
+    traced_contacts: BTreeMap<ExposureTime, TracedContact>,
+}
+
+impl BluetoothLayer {
+    pub fn new() -> Self {
+        Self {
+            traced_contacts: BTreeMap::new(),
+        }
+    }
+    pub fn add(&mut self, traced_contact: TracedContact, tekrp: TekRollingPeriod) -> () {
+        self.traced_contacts.insert(
+            traced_contact.exposure_time.floor_tekrp_multiple(tekrp),
+            traced_contact,
+        );
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TracedContact {
+    timestamp: DateTime<Utc>,
+    exposure_time: ExposureTime,
+    rpi: RollingProximityIdentifier,
+    // TODO: contains Intensity | ConnectionIdentifier (or seed)
+    // aem: AssociatedEncryptedMetadata,
+}
+
+impl TracedContact {
+    pub fn new(timestamp: DateTime<Utc>, rpi: RollingProximityIdentifier) -> Self {
+        Self { timestamp, exposure_time: ExposureTime::from(timestamp), rpi }
     }
 }

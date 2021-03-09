@@ -166,6 +166,7 @@ dependencies = [
  "petgraph",
  "serde",
  "serde_yaml",
+ "thiserror",
 ]
 
 [[package]]
