@@ -50,6 +50,17 @@ impl<Keyring> Validity<Keyring> {
     }
 }
 
+impl TryFrom<Validity<TemporaryExposureKey>> for Validity<TekKeyring> {
+    type Error = ExposurelibError;
+
+    fn try_from(tek_validity: Validity<TemporaryExposureKey>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            valid_from: tek_validity.valid_from,
+            keyring: TekKeyring::try_from(tek_validity.keyring)?,
+        })
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TekKeyring {
     tek: TemporaryExposureKey,
@@ -360,7 +371,10 @@ impl RollingProximityIdentifier {
         for (i, byte) in Self::INFO.as_bytes().iter().enumerate() {
             padded_data[i] = *byte;
         }
-        for (i, byte) in j.as_bytes().iter().enumerate() {
+        for (i, byte) in <[u8; std::mem::size_of::<u32>()]>::from(j)
+            .iter()
+            .enumerate()
+        {
             padded_data[i + 12] = *byte;
         }
         padded_data

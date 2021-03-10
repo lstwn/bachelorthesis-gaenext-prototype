@@ -9,25 +9,7 @@ pub struct ExposureTime {
     en_interval_number: u32,
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
-pub struct TekrpMultiple {
-    en_interval_number: u32,
-}
-
-impl TekrpMultiple {
-    pub fn from_exposure_time(exposure_time: ExposureTime, tekrp: TekRollingPeriod) -> Self {
-        let tekrp = u32::from(tekrp);
-        Self { en_interval_number: u32::from(exposure_time) / tekrp * tekrp }
-    }
-}
-
 impl ExposureTime {
-    pub fn as_number(&self) -> u32 {
-        self.en_interval_number
-    }
-    pub fn as_bytes(&self) -> [u8; std::mem::size_of::<u32>()] {
-        self.en_interval_number.to_le_bytes()
-    }
     pub fn floor_tekrp_multiple(&self, tekrp: TekRollingPeriod) -> Self {
         let tekrp = u32::from(tekrp);
         ExposureTime {
@@ -39,9 +21,15 @@ impl ExposureTime {
     }
 }
 
+impl From<ExposureTime> for [u8; std::mem::size_of::<u32>()] {
+    fn from(exposure_time: ExposureTime) -> Self {
+        exposure_time.en_interval_number.to_le_bytes()
+    }
+}
+
 impl From<ExposureTime> for u32 {
-    fn from(exposre_time: ExposureTime) -> Self {
-        exposre_time.en_interval_number
+    fn from(exposure_time: ExposureTime) -> Self {
+        exposure_time.en_interval_number
     }
 }
 
@@ -119,52 +107,7 @@ impl Sub<TekRollingPeriod> for ExposureTime {
     }
 }
 
-pub trait ExposureTimeInterval
-where
-    Self: Sized,
-{
-    fn contains(&self, exposure_time: ExposureTime) -> bool;
-    fn intersection(&self, other: &Self) -> Option<Self>;
-}
-
-pub struct ExposureTimeSet {
-    inner: BTreeSet<ExposureTime>,
-}
-
-pub struct ContinuousExposureTimeInterval {
-    from_inclusive: ExposureTime,
-    to_exclusive: ExposureTime,
-}
-
-impl ContinuousExposureTimeInterval {
-    pub fn new(from_inclusive: ExposureTime, to_exclusive: ExposureTime) -> Self {
-        Self {
-            from_inclusive,
-            to_exclusive,
-        }
-    }
-}
-
-impl ExposureTimeInterval for ContinuousExposureTimeInterval {
-    fn contains(&self, exposure_time: ExposureTime) -> bool {
-        self.from_inclusive <= exposure_time && exposure_time < self.to_exclusive
-    }
-    fn intersection(&self, other: &Self) -> Option<Self> {
-        if self.from_inclusive >= other.to_exclusive || self.to_exclusive <= other.from_inclusive {
-            return None;
-        }
-        let from_inclusive = std::cmp::max(self.from_inclusive, other.from_inclusive);
-        let to_exclusive = if self.to_exclusive == other.to_exclusive {
-            self.to_exclusive
-        } else {
-            std::cmp::min(self.to_exclusive, other.to_exclusive) + ExposureTime::from(1)
-        };
-        Some(Self {
-            from_inclusive,
-            to_exclusive,
-        })
-    }
-}
+pub type ExposureTimeSet = BTreeSet<ExposureTime>;
 
 #[cfg(test)]
 mod tests {
@@ -174,21 +117,21 @@ mod tests {
     #[test]
     fn test_exposure_time_creation() {
         let exposure_time: ExposureTime = Utc.timestamp(0, 0).into();
-        assert_eq!(exposure_time.as_number(), 0);
+        assert_eq!(u32::from(exposure_time), 0);
         let exposure_time: ExposureTime = Utc.timestamp(10 * 60, 0).into();
-        assert_eq!(exposure_time.as_number(), 1);
+        assert_eq!(u32::from(exposure_time), 1);
         let exposure_time: ExposureTime = Utc.timestamp(9 * 60, 999).into();
-        assert_eq!(exposure_time.as_number(), 0);
+        assert_eq!(u32::from(exposure_time), 0);
         let exposure_time: ExposureTime = Utc.ymd(1970, 1, 1).and_hms(0, 0, 0).into();
-        assert_eq!(exposure_time.as_number(), 0);
+        assert_eq!(u32::from(exposure_time), 0);
         let exposure_time: ExposureTime = Utc.ymd(1970, 1, 2).and_hms(0, 0, 0).into();
-        assert_eq!(exposure_time.as_number(), 24 * 60 / 10);
+        assert_eq!(u32::from(exposure_time), 24 * 60 / 10);
         let exposure_time: ExposureTime = Utc.ymd(1970, 1, 2).and_hms(0, 2, 0).into();
-        assert_eq!(exposure_time.as_number(), 24 * 60 / 10);
+        assert_eq!(u32::from(exposure_time), 24 * 60 / 10);
         let exposure_time: ExposureTime = Utc.ymd(1970, 1, 2).and_hms(0, 9, 59).into();
-        assert_eq!(exposure_time.as_number(), 24 * 60 / 10);
+        assert_eq!(u32::from(exposure_time), 24 * 60 / 10);
         let exposure_time: ExposureTime = Utc.ymd(1970, 1, 2).and_hms(0, 10, 0).into();
-        assert_eq!(exposure_time.as_number(), 24 * 60 / 10 + 1);
+        assert_eq!(u32::from(exposure_time), 24 * 60 / 10 + 1);
     }
 
     #[test]
@@ -209,31 +152,5 @@ mod tests {
         let equal_a = ExposureTime::from(Utc.ymd(2021, 02, 17).and_hms(0, 45, 0));
         let equal_b = ExposureTime::from(Utc.ymd(2021, 02, 17).and_hms(0, 46, 0));
         assert!(equal_a == equal_b);
-    }
-
-    #[test]
-    fn test_continouos_interval() {
-        let tekrp = TekRollingPeriod::default();
-        let exposure_time = ExposureTime::from(1000);
-        let continouos_interval =
-            ContinuousExposureTimeInterval::new(exposure_time, exposure_time + tekrp);
-        assert!(continouos_interval.contains(exposure_time));
-        assert!(continouos_interval.contains(exposure_time + tekrp - ExposureTime::from(1)));
-        assert!(!continouos_interval.contains(exposure_time + tekrp));
-        assert!(continouos_interval.contains(ExposureTime::from(1005)));
-
-        let non_overlapping_lower =
-            ContinuousExposureTimeInterval::new(exposure_time - tekrp, exposure_time);
-        assert!(continouos_interval
-            .intersection(&non_overlapping_lower)
-            .is_none());
-
-        let non_overlapping_higher = ContinuousExposureTimeInterval::new(
-            exposure_time + tekrp,
-            exposure_time + tekrp + tekrp,
-        );
-        assert!(continouos_interval
-            .intersection(&non_overlapping_higher)
-            .is_none());
     }
 }
