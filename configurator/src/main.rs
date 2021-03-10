@@ -7,7 +7,7 @@ use args::{Args, EmitDefaultConfigArgs, GenerateConfigsArgs};
 use chrono::Duration;
 use config::Config;
 use exposurelib::client_state::{BluetoothLayer, ClientState, Keys, TracedContact};
-use exposurelib::config::{ClientConfig, Participant};
+use exposurelib::config::{ClientConfig, DiagnosisServerConfig, Participant};
 use exposurelib::primitives::SystemRandom;
 use petgraph::dot::Dot;
 use petgraph::visit::IntoNodeReferences;
@@ -96,6 +96,7 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
         }
     }
 
+    let diagnosis_server_endpoint: SocketAddr = config.diagnosis_server_endpoint.parse()?;
     let host: IpAddr = config.host.parse()?;
     let mut port: u16 = config.base_port;
 
@@ -103,13 +104,19 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
         .node_references()
         .map(|(_, participant)| {
             let participant = participant.clone();
-            let endpoint = SocketAddr::new(host, port.clone());
+            let client_endpoint = SocketAddr::new(host, port.clone());
             port = port + 1;
             let state = ClientState::new(
                 client_keys.remove(&participant).unwrap(),
                 client_bluetooth_layers.remove(&participant).unwrap(),
             );
-            ClientConfig::new(participant, endpoint, config.system_params, state)
+            ClientConfig::new(
+                participant,
+                client_endpoint,
+                diagnosis_server_endpoint,
+                config.system_params,
+                state,
+            )
         })
         .collect();
 
@@ -126,6 +133,19 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
             client_config_file_path
         ))?;
     }
+
+    let diagnosis_server_config =
+        DiagnosisServerConfig::new(diagnosis_server_endpoint, config.system_params);
+    let mut diagnosis_server_config_file_path = PathBuf::from(&args.config_output_path);
+    diagnosis_server_config_file_path.push("diagnosisserver");
+    diagnosis_server_config_file_path.set_extension("yaml");
+    let yaml_diagnosis_server_config = serde_yaml::to_string(&diagnosis_server_config).context(
+        format!("Could not serialize diagnosis server config {:?}", diagnosis_server_config),
+    )?;
+    fs::write(&diagnosis_server_config_file_path, yaml_diagnosis_server_config).context(format!(
+        "Could not write client config to {:?}.",
+        diagnosis_server_config_file_path
+    ))?;
 
     let mut dot_graph_file_path = PathBuf::from(&args.config_output_path);
     dot_graph_file_path.push(&args.config_file_path.file_name().unwrap());

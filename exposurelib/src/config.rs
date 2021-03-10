@@ -7,9 +7,17 @@ use std::fmt;
 use std::hash;
 use std::net::SocketAddr;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct DiagnosisServerConfig {
     endpoint: SocketAddr,
+    #[serde(flatten)]
+    params: SystemParams,
+}
+
+impl DiagnosisServerConfig {
+    pub fn new(endpoint: SocketAddr, params: SystemParams) -> Self {
+        Self { endpoint, params }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -116,7 +124,8 @@ pub struct SystemParams {
 pub struct ClientConfig {
     #[serde(flatten)]
     pub participant: Participant,
-    pub endpoint: SocketAddr,
+    pub client_endpoint: SocketAddr,
+    pub diagnosis_server_endpoint: SocketAddr,
     #[serde(flatten)]
     pub params: SystemParams,
     pub state: ClientState,
@@ -125,13 +134,15 @@ pub struct ClientConfig {
 impl ClientConfig {
     pub fn new(
         participant: Participant,
-        endpoint: SocketAddr,
+        client_endpoint: SocketAddr,
+        diagnosis_server_endpoint: SocketAddr,
         params: SystemParams,
         state: ClientState,
     ) -> Self {
         Self {
             participant,
-            endpoint,
+            client_endpoint,
+            diagnosis_server_endpoint,
             params,
             state,
         }

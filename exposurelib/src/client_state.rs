@@ -18,7 +18,10 @@ pub struct ClientState {
 
 impl ClientState {
     pub fn new(keys: Keys, bluetooth_layer: BluetoothLayer) -> Self {
-        Self { keys, bluetooth_layer }
+        Self {
+            keys,
+            bluetooth_layer,
+        }
     }
 }
 
@@ -61,14 +64,14 @@ impl Keys {
             None => None,
         }
     }
-    pub fn keys(&self) -> &VecDeque<Validity<ExposureKeyring>> {
+    fn keys(&self) -> &VecDeque<Validity<ExposureKeyring>> {
         &self.0
     }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BluetoothLayer {
-    traced_contacts: BTreeMap<ExposureTime, TracedContact>,
+    traced_contacts: BTreeMap<ExposureTime, BTreeMap<ExposureTime, Vec<TracedContact>>>,
 }
 
 impl BluetoothLayer {
@@ -78,11 +81,20 @@ impl BluetoothLayer {
         }
     }
     pub fn add(&mut self, traced_contact: TracedContact, tekrp: TekRollingPeriod) -> () {
-        self.traced_contacts.insert(
-            traced_contact.exposure_time.floor_tekrp_multiple(tekrp),
-            traced_contact,
-        );
+        let encounters_at_tekrp_multiple = self
+            .traced_contacts
+            .entry(traced_contact.exposure_time.floor_tekrp_multiple(tekrp))
+            .or_insert(BTreeMap::new());
+        let encounters_at_exposure_time = encounters_at_tekrp_multiple
+            .entry(traced_contact.exposure_time)
+            .or_insert(Vec::new());
+        encounters_at_exposure_time.push(traced_contact);
     }
+    // pub fn match(
+    //     &self,
+    //     with: Validity<TekKeyring>
+    // ) -> Option<ExposureTimeSet> {
+    // }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -96,6 +108,10 @@ pub struct TracedContact {
 
 impl TracedContact {
     pub fn new(timestamp: DateTime<Utc>, rpi: RollingProximityIdentifier) -> Self {
-        Self { timestamp, exposure_time: ExposureTime::from(timestamp), rpi }
+        Self {
+            timestamp,
+            exposure_time: ExposureTime::from(timestamp),
+            rpi,
+        }
     }
 }

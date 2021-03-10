@@ -8,6 +8,7 @@ use exposurelib::config::{Encounter, Encounters, Intensity, Participant, SystemP
 pub struct Config {
     pub host: String,
     pub base_port: u16,
+    pub diagnosis_server_endpoint: String,
     pub system_params: SystemParams,
     pub today: DateTime<Utc>,
     /// All dates specified in the graph sould be within
@@ -51,6 +52,7 @@ impl Default for Config {
         Config {
             host: String::from("127.0.0.1"),
             base_port: 9000,
+            diagnosis_server_endpoint: String::from("127.0.0.1:8999"),
             system_params: SystemParams::default(),
             today: Utc.ymd(2021, 3, 14).and_hms(0, 0, 0),
             social_graph,
