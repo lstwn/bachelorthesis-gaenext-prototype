@@ -1,4 +1,5 @@
 use super::time::ExposureTime;
+use crate::config::Intensity;
 use crate::error::ExposurelibError;
 use aes::cipher::generic_array::GenericArray;
 use aes::{Aes128, BlockCipher, NewBlockCipher};
@@ -9,6 +10,7 @@ use ring::rand::SecureRandom;
 pub use ring::rand::SystemRandom;
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
+use std::net::SocketAddr;
 
 #[derive(Serialize, Deserialize)]
 pub struct KeyForward {
@@ -72,6 +74,22 @@ impl TekKeyring {
     pub fn rpi(&self, at: ExposureTime) -> RollingProximityIdentifier {
         RollingProximityIdentifier::new(&self.rpik, at)
     }
+    fn aem(
+        &self,
+        rpi: &RollingProximityIdentifier,
+        metadata: Metadata,
+    ) -> AssociatedEncryptedMetadata {
+        AssociatedEncryptedMetadata::encrypt(&self.aemk, rpi, metadata)
+    }
+    pub fn rpi_and_aem(
+        &self,
+        at: ExposureTime,
+        metadata: Metadata,
+    ) -> (RollingProximityIdentifier, AssociatedEncryptedMetadata) {
+        let rpi = self.rpi(at);
+        let aem = self.aem(&rpi, metadata);
+        (rpi, aem)
+    }
 }
 
 impl TryFrom<TemporaryExposureKey> for TekKeyring {
@@ -90,6 +108,11 @@ impl TryFrom<TemporaryExposureKey> for TekKeyring {
 pub struct SdKeyring {
     sd: Seed,
     pksk: PublicKeySymmetricKey,
+}
+
+impl SdKeyring {
+    // pub fn epk(&self, tek: &TemporaryExposureKey, pk: PublicKey) -> EncryptedPublicKey {
+    // }
 }
 
 impl TryFrom<Seed> for SdKeyring {
@@ -111,9 +134,15 @@ pub struct ExposureKeyring {
 
 impl ExposureKeyring {
     pub fn new(secure_random: &dyn SecureRandom) -> Result<Self, ExposurelibError> {
+        Self::from_tek_and_sd(
+            TemporaryExposureKey::new(secure_random)?,
+            Seed::new(secure_random)?,
+        )
+    }
+    pub fn from_tek_and_sd(tek: TemporaryExposureKey, sd: Seed) -> Result<Self, ExposurelibError> {
         Ok(Self {
-            tek_keyring: TekKeyring::try_from(TemporaryExposureKey::new(secure_random)?)?,
-            sd_keyring: SdKeyring::try_from(Seed::new(secure_random)?)?,
+            tek_keyring: TekKeyring::try_from(tek)?,
+            sd_keyring: SdKeyring::try_from(sd)?,
         })
     }
     pub fn tek_keyring(&self) -> &TekKeyring {
@@ -122,6 +151,9 @@ impl ExposureKeyring {
     pub fn sd_keyring(&self) -> &SdKeyring {
         &self.sd_keyring
     }
+    // pub fn epk(&self, pk: PublicKey) -> EncryptedPublicKey {
+    //     self.sd_keyring().epk(&self.tek_keyring().tek, pk)
+    // }
 }
 
 /// The TEK rolling period (TEKRP) is stated in multiples of 10 minutes.
@@ -386,6 +418,52 @@ impl Key for RollingProximityIdentifier {
 
     fn get(&self) -> &[u8] {
         &self.key
+    }
+}
+
+#[derive(Clone, Debug, Copy, Serialize, Deserialize)]
+pub struct Metadata {
+    intensity: Intensity,
+    // actually seed instead of connection identifier
+    connection_identifier: SocketAddr,
+}
+
+impl Metadata {
+    pub fn new(intensity: Intensity, connection_identifier: SocketAddr) -> Self {
+        Self {
+            intensity,
+            connection_identifier,
+        }
+    }
+    pub fn intensity(&self) -> Intensity {
+        self.intensity
+    }
+    pub fn connection_identifier(&self) -> SocketAddr {
+        self.connection_identifier
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssociatedEncryptedMetadata {
+    ciphertext: Metadata,
+}
+
+impl AssociatedEncryptedMetadata {
+    pub fn encrypt(
+        _aemk: &AssociatedEncryptedMetadataKey,
+        _rpi: &RollingProximityIdentifier,
+        metadata: Metadata,
+    ) -> Self {
+        Self {
+            ciphertext: metadata,
+        }
+    }
+    pub fn decrypt(
+        &self,
+        _aemk: &AssociatedEncryptedMetadataKey,
+        _rpi: &RollingProximityIdentifier,
+    ) -> Metadata {
+        self.ciphertext
     }
 }
 

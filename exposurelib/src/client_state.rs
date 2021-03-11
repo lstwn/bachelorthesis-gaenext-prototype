@@ -1,6 +1,7 @@
 use crate::error::ExposurelibError;
 use crate::primitives::{
-    ExposureKeyring, InfectionPeriod, RollingProximityIdentifier, TekRollingPeriod, Validity,
+    AssociatedEncryptedMetadata, ExposureKeyring, InfectionPeriod, RollingProximityIdentifier,
+    TekRollingPeriod, Validity,
 };
 use crate::time::ExposureTime;
 use chrono::prelude::*;
@@ -50,19 +51,14 @@ impl Keys {
         }
         Ok(Self(keys))
     }
-    pub fn rpi(
+    pub fn exposure_keyring(
         &self,
         at: ExposureTime,
         tekrp: TekRollingPeriod,
-    ) -> Option<RollingProximityIdentifier> {
-        match self
-            .keys()
+    ) -> Option<&ExposureKeyring> {
+        self.keys()
             .iter()
             .find_map(|validity| validity.query(at, tekrp))
-        {
-            Some(keyring) => Some(keyring.tek_keyring().rpi(at)),
-            None => None,
-        }
     }
     fn keys(&self) -> &VecDeque<Validity<ExposureKeyring>> {
         &self.0
@@ -102,16 +98,20 @@ pub struct TracedContact {
     timestamp: DateTime<Utc>,
     exposure_time: ExposureTime,
     rpi: RollingProximityIdentifier,
-    // TODO: contains Intensity | ConnectionIdentifier (or seed)
-    // aem: AssociatedEncryptedMetadata,
+    aem: AssociatedEncryptedMetadata,
 }
 
 impl TracedContact {
-    pub fn new(timestamp: DateTime<Utc>, rpi: RollingProximityIdentifier) -> Self {
+    pub fn new(
+        timestamp: DateTime<Utc>,
+        rpi: RollingProximityIdentifier,
+        aem: AssociatedEncryptedMetadata,
+    ) -> Self {
         Self {
             timestamp,
             exposure_time: ExposureTime::from(timestamp),
             rpi,
+            aem,
         }
     }
 }

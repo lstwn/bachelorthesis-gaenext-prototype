@@ -8,7 +8,7 @@ use chrono::Duration;
 use config::Config;
 use exposurelib::client_state::{BluetoothLayer, ClientState, Keys, TracedContact};
 use exposurelib::config::{ClientConfig, DiagnosisServerConfig, Participant};
-use exposurelib::primitives::SystemRandom;
+use exposurelib::primitives::{Metadata, SystemRandom};
 use petgraph::dot::Dot;
 use petgraph::visit::IntoNodeReferences;
 use std::collections::HashMap;
@@ -51,20 +51,27 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
 
     let participant_count = graph.node_references().count();
 
-    let mut client_keys: HashMap<&Participant, Keys> = HashMap::with_capacity(participant_count);
-    let mut client_bluetooth_layers: HashMap<&Participant, BluetoothLayer> =
+    let mut client_init: HashMap<&Participant, (Keys, BluetoothLayer, SocketAddr)> =
         HashMap::with_capacity(participant_count);
+
+    let host: IpAddr = config.host.parse()?;
+    let mut port: u16 = config.base_port;
+
     for (_, participant) in graph.node_references() {
-        client_keys.insert(
+        client_init.insert(
             participant,
-            Keys::new(
-                config.today,
-                config.system_params.tek_rolling_period,
-                config.system_params.infection_period,
-                &secure_random,
-            )?,
+            (
+                Keys::new(
+                    config.today,
+                    config.system_params.tek_rolling_period,
+                    config.system_params.infection_period,
+                    &secure_random,
+                )?,
+                BluetoothLayer::new(),
+                SocketAddr::new(host, port.clone()),
+            ),
         );
-        client_bluetooth_layers.insert(participant, BluetoothLayer::new());
+        port = port + 1;
     }
 
     let tekrp = config.system_params.tek_rolling_period;
@@ -74,10 +81,10 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
             let edge_index = graph.find_edge(node_index, other_node_index).unwrap();
             let encounters = graph.edge_weight(edge_index).unwrap();
             for encounter in encounters.encounters.iter() {
-                let rpi = client_keys
-                    .get(&participant)
-                    .unwrap()
-                    .rpi(encounter.time.into(), tekrp)
+                let (keys, _, endpoint) = client_init.get(&participant).unwrap();
+                let metadata = Metadata::new(encounter.intensity, endpoint.clone());
+                let (rpi, aem) = keys
+                    .exposure_keyring(encounter.time.into(), tekrp)
                     .ok_or(InvalidConfigError::EncounterOutOfBounds {
                         from: participant.clone(),
                         to: other_participant.clone(),
@@ -87,30 +94,25 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
                             + Duration::from(tekrp),
                         upper: config.today + Duration::from(tekrp),
                     })
-                    .context("Invalid config")?;
-                let traced_contact = TracedContact::new(encounter.time, rpi);
-                client_bluetooth_layers
-                    .get_mut(&other_participant)
-                    .unwrap()
-                    .add(traced_contact, tekrp)
+                    .context("Invalid config")?
+                    .tek_keyring()
+                    .rpi_and_aem(encounter.time.into(), metadata);
+                let traced_contact = TracedContact::new(encounter.time, rpi, aem);
+                let (_, bluetooth_layer, _) = client_init.get_mut(&other_participant).unwrap();
+                bluetooth_layer.add(traced_contact, tekrp)
             }
         }
     }
 
     let diagnosis_server_endpoint: SocketAddr = config.diagnosis_server_endpoint.parse()?;
-    let host: IpAddr = config.host.parse()?;
-    let mut port: u16 = config.base_port;
 
     let client_configs: Vec<ClientConfig> = graph
         .node_references()
         .map(|(_, participant)| {
             let participant = participant.clone();
-            let client_endpoint = SocketAddr::new(host, port.clone());
-            port = port + 1;
-            let state = ClientState::new(
-                client_keys.remove(&participant).unwrap(),
-                client_bluetooth_layers.remove(&participant).unwrap(),
-            );
+            let (keys, bluetooth_layer, client_endpoint) =
+                client_init.remove(&participant).unwrap();
+            let state = ClientState::new(keys, bluetooth_layer);
             ClientConfig::new(
                 participant,
                 client_endpoint,
