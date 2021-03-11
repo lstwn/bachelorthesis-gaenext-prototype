@@ -12,9 +12,10 @@ use exposurelib::primitives::SystemRandom;
 use petgraph::dot::Dot;
 use petgraph::visit::IntoNodeReferences;
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::fs;
 use std::net::{IpAddr, SocketAddr};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() -> Result<()> {
     let args = Args::new();
@@ -161,12 +162,7 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
     Ok(())
 }
 
-fn write_config<
-    U: Into<PathBuf>,
-    P: AsRef<std::path::Path>,
-    S: AsRef<std::ffi::OsStr>,
-    T: AsRef<[u8]>,
->(
+fn write_config<U: Into<PathBuf>, P: AsRef<Path>, S: AsRef<OsStr>, T: AsRef<[u8]>>(
     path: U,
     file_name: P,
     extension: S,
