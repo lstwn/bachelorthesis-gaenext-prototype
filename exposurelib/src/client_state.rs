@@ -1,9 +1,9 @@
 use crate::error::ExposurelibError;
 use crate::primitives::{
-    AssociatedEncryptedMetadata, ExposureKeyring, InfectionPeriod, RollingProximityIdentifier,
-    TekRollingPeriod, Validity,
+    AssociatedEncryptedMetadata, ExposureKeyring, InfectionPeriod, Metadata,
+    RollingProximityIdentifier, TekRollingPeriod, Validity, TekKeyring
 };
-use crate::time::ExposureTime;
+use crate::time::{ExposureTime, ExposureTimeSet};
 use chrono::prelude::*;
 use chrono::Duration;
 use ring::rand::SecureRandom;
@@ -86,11 +86,19 @@ impl BluetoothLayer {
             .or_insert(Vec::new());
         encounters_at_exposure_time.push(traced_contact);
     }
-    // pub fn match(
-    //     &self,
-    //     with: Validity<TekKeyring>
-    // ) -> Option<ExposureTimeSet> {
-    // }
+    pub fn high_risk_matches(
+        &self,
+        with: Validity<TekKeyring>,
+        // TODO: RETURN TYPE
+    ) -> Option<(ExposureTimeSet, Metadata)> {
+        // assert!(with.valid_from() == with.valid_from().floor_tekrp_multiple(tekrp));
+        let encounters_at_tekrp_multiple = match self.traced_contacts.get(&with.valid_from()) {
+            Some(encounters_at_tekrp_multiple) => encounters_at_tekrp_multiple,
+            None => return None,
+        };
+        // TODO: RPI match, if yes, AEM decrypt and return
+        todo!("");
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

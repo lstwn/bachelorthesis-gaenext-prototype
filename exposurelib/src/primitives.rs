@@ -43,9 +43,12 @@ impl<Keyring> Validity<Keyring> {
     pub fn keyring(&self) -> &Keyring {
         &self.keyring
     }
+    pub fn valid_from(&self) -> ExposureTime {
+        self.valid_from
+    }
     pub fn query(&self, exposure_time: ExposureTime, tekrp: TekRollingPeriod) -> Option<&Keyring> {
         if exposure_time.floor_tekrp_multiple(tekrp) == self.valid_from {
-            Some(&self.keyring)
+            Some(self.keyring())
         } else {
             None
         }
