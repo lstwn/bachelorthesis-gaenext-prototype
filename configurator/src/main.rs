@@ -121,39 +121,61 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
         .collect();
 
     for client_config in client_configs.iter() {
-        let mut client_config_file_path = PathBuf::from(&args.config_output_path);
-        client_config_file_path.push(client_config.name());
-        client_config_file_path.set_extension("yaml");
         let yaml_client_config = serde_yaml::to_string(&client_config).context(format!(
             "Could not serialize client config {:?}",
             client_config
         ))?;
-        fs::write(&client_config_file_path, yaml_client_config).context(format!(
-            "Could not write client config to {:?}.",
-            client_config_file_path
-        ))?;
+        write_config(
+            &args.config_output_path,
+            client_config.name(),
+            "yaml",
+            yaml_client_config,
+        )
+        .context("Error writing client config")?;
     }
 
     let diagnosis_server_config =
         DiagnosisServerConfig::new(diagnosis_server_endpoint, config.system_params);
-    let mut diagnosis_server_config_file_path = PathBuf::from(&args.config_output_path);
-    diagnosis_server_config_file_path.push("diagnosisserver");
-    diagnosis_server_config_file_path.set_extension("yaml");
-    let yaml_diagnosis_server_config = serde_yaml::to_string(&diagnosis_server_config).context(
-        format!("Could not serialize diagnosis server config {:?}", diagnosis_server_config),
-    )?;
-    fs::write(&diagnosis_server_config_file_path, yaml_diagnosis_server_config).context(format!(
-        "Could not write client config to {:?}.",
-        diagnosis_server_config_file_path
-    ))?;
+    let yaml_diagnosis_server_config =
+        serde_yaml::to_string(&diagnosis_server_config).context(format!(
+            "Could not serialize diagnosis server config {:?}",
+            diagnosis_server_config
+        ))?;
+    write_config(
+        &args.config_output_path,
+        "diagnosisserver",
+        "yaml",
+        yaml_diagnosis_server_config,
+    )
+    .context("Error writing diagnosis config")?;
 
-    let mut dot_graph_file_path = PathBuf::from(&args.config_output_path);
-    dot_graph_file_path.push(&args.config_file_path.file_name().unwrap());
-    dot_graph_file_path.set_extension("dot");
-    fs::write(&dot_graph_file_path, format!("{}", Dot::new(&graph))).context(format!(
-        "Could not write dot graph file to {:?}.",
-        dot_graph_file_path
-    ))?;
+    let dot_graph = format!("{}", Dot::new(&graph));
+    write_config(
+        &args.config_output_path,
+        args.config_file_path.file_name().unwrap(),
+        "dot",
+        dot_graph,
+    )
+    .context("Error writing dot graph file")?;
 
+    Ok(())
+}
+
+fn write_config<
+    U: Into<PathBuf>,
+    P: AsRef<std::path::Path>,
+    S: AsRef<std::ffi::OsStr>,
+    T: AsRef<[u8]>,
+>(
+    path: U,
+    file_name: P,
+    extension: S,
+    config: T,
+) -> Result<()> {
+    let mut config_file_path: PathBuf = path.into();
+    config_file_path.push(file_name);
+    config_file_path.set_extension(extension);
+    fs::write(&config_file_path, config)
+        .context(format!("Could not write file to {:?}.", config_file_path))?;
     Ok(())
 }
