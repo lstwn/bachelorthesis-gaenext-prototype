@@ -77,6 +77,9 @@ impl TekKeyring {
     pub fn rpi(&self, at: ExposureTime) -> RollingProximityIdentifier {
         RollingProximityIdentifier::new(&self.rpik, at)
     }
+    pub fn aemk(&self) -> &AssociatedEncryptedMetadataKey {
+        &self.aemk
+    }
     fn aem(
         &self,
         rpi: &RollingProximityIdentifier,

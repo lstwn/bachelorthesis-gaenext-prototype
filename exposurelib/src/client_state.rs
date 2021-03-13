@@ -1,14 +1,16 @@
+use crate::config::Intensity;
 use crate::error::ExposurelibError;
 use crate::primitives::{
-    AssociatedEncryptedMetadata, ExposureKeyring, InfectionPeriod, Metadata,
-    RollingProximityIdentifier, TekRollingPeriod, Validity, TekKeyring
+    AssociatedEncryptedMetadata, ExposureKeyring, InfectionPeriod, RollingProximityIdentifier,
+    TekKeyring, TekRollingPeriod, Validity,
 };
 use crate::time::{ExposureTime, ExposureTimeSet};
 use chrono::prelude::*;
 use chrono::Duration;
 use ring::rand::SecureRandom;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{btree_set::Union, BTreeMap, VecDeque};
+use std::net::SocketAddr;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ClientState {
@@ -86,18 +88,81 @@ impl BluetoothLayer {
             .or_insert(Vec::new());
         encounters_at_exposure_time.push(traced_contact);
     }
-    pub fn high_risk_matches(
-        &self,
-        with: Validity<TekKeyring>,
-        // TODO: RETURN TYPE
-    ) -> Option<(ExposureTimeSet, Metadata)> {
+    pub fn matches(&self, with: Validity<TekKeyring>) -> Option<Matches> {
         // assert!(with.valid_from() == with.valid_from().floor_tekrp_multiple(tekrp));
         let encounters_at_tekrp_multiple = match self.traced_contacts.get(&with.valid_from()) {
-            Some(encounters_at_tekrp_multiple) => encounters_at_tekrp_multiple,
+            Some(encounters_at_exposure_time) => encounters_at_exposure_time,
             None => return None,
         };
-        // TODO: RPI match, if yes, AEM decrypt and return
-        todo!("");
+
+        let mut high_risk = ExposureTimeSet::new();
+        let mut low_risk = ExposureTimeSet::new();
+        let mut socket_addr = None;
+
+        for encounters_at_exposure_time in encounters_at_tekrp_multiple.iter() {
+            let (exposure_time, traced_contacts) = encounters_at_exposure_time;
+            let derived_rpi = with.keyring().rpi(exposure_time.clone());
+            for traced_contact in traced_contacts {
+                let observed_rpi = &traced_contact.rpi;
+                if *observed_rpi == derived_rpi {
+                    let metadata = traced_contact
+                        .aem
+                        .decrypt(with.keyring().aemk(), &derived_rpi);
+                    if metadata.intensity() == Intensity::HighRisk {
+                        high_risk.insert(exposure_time.clone());
+                    } else {
+                        low_risk.insert(exposure_time.clone());
+                    }
+                    // NOTE: just for debugging; latest CI can actually win..
+                    if socket_addr.is_some()
+                        && socket_addr.unwrap() != metadata.connection_identifier()
+                    {
+                        panic!("One TEK yielded different socket addresses/connection identifiers");
+                    } else {
+                        socket_addr = Some(metadata.connection_identifier());
+                    }
+                }
+            }
+        }
+
+        if socket_addr.is_some() {
+            Some(Matches::new(socket_addr.unwrap(), high_risk, low_risk))
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Matches {
+    socket_addr: SocketAddr,
+    high_risk: ExposureTimeSet,
+    low_risk: ExposureTimeSet,
+}
+
+impl Matches {
+    pub fn new(
+        socket_addr: SocketAddr,
+        high_risk: ExposureTimeSet,
+        low_risk: ExposureTimeSet,
+    ) -> Self {
+        Self {
+            socket_addr,
+            high_risk,
+            low_risk,
+        }
+    }
+    pub fn connection_identifier(&self) -> SocketAddr {
+        self.socket_addr
+    }
+    pub fn high_risk(&self) -> &ExposureTimeSet {
+        &self.high_risk
+    }
+    pub fn low_risk(&self) -> &ExposureTimeSet {
+        &self.low_risk
+    }
+    pub fn any_risk(&self) -> Union<ExposureTime> {
+        self.high_risk.union(self.low_risk())
     }
 }
 
