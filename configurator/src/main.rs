@@ -123,13 +123,19 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
         })
         .collect();
 
+    let mut client_config_output_path = args.config_output_path.clone();
+    client_config_output_path.push("clients");
+    fs::create_dir_all(&client_config_output_path).context(format!(
+        "Error ensuring client config output path exists {:?}",
+        client_config_output_path
+    ))?;
     for client_config in client_configs.iter() {
         let yaml_client_config = serde_yaml::to_string(&client_config).context(format!(
             "Could not serialize client config {:?}",
             client_config
         ))?;
         write_config(
-            &args.config_output_path,
+            &client_config_output_path,
             client_config.name(),
             "yaml",
             yaml_client_config,
