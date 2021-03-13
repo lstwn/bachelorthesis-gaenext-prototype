@@ -29,6 +29,12 @@ fn main() -> Result<()> {
 fn handle_emit_default_config(args: EmitDefaultConfigArgs) -> Result<()> {
     let config = Config::default();
     let config = serde_yaml::to_string(&config).unwrap();
+    if let Some(parent) = args.config_file_path.parent() {
+        fs::create_dir_all(parent).context(format!(
+            "Could not ensure parent folders {:?} are existing.",
+            parent
+        ))?;
+    };
     fs::write(&args.config_file_path, config).context(format!(
         "Could not write config to {:?}.",
         args.config_file_path

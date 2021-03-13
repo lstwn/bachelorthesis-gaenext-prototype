@@ -23,6 +23,8 @@ impl Args {
     const EMIT_DEFAULT_CONFIG: &'static str = "emit-default-config";
     const CONFIG_FILE_PATH: &'static str = "CONFIG_FILE_PATH";
     const CONFIG_OUTPUT_PATH: &'static str = "CONFIG_OUTPUT_PATH";
+    const CONFIG_FILE_PATH_DEFAULT: &'static str = "configs/configurator.yaml";
+    const CONFIG_OUTPUT_PATH_DEFAULT: &'static str = "configs";
 
     pub fn new() -> Self {
         let matches = App::new(crate_name!())
@@ -37,7 +39,7 @@ impl Args {
                             .short("c")
                             .long("config")
                             .value_name("FILE")
-                            .required(true)
+                            .default_value(Self::CONFIG_FILE_PATH_DEFAULT)
                             .help("Sets the input yaml config file"),
                     )
                     .arg(
@@ -45,7 +47,7 @@ impl Args {
                         .short("o")
                         .long("output")
                         .value_name("DIRECTORY")
-                        .required(true)
+                        .default_value(Self::CONFIG_OUTPUT_PATH_DEFAULT)
                         .help("Sets the output directory to put all generated configs into"),
                     ),
             )
@@ -57,7 +59,7 @@ impl Args {
                             .short("o")
                             .long("output")
                             .value_name("FILE")
-                            .required(true)
+                            .default_value(Self::CONFIG_FILE_PATH_DEFAULT)
                             .help("Sets the output yaml config file"),
                         ),
             )
