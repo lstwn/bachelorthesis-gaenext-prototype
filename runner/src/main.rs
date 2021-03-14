@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use args::Args;
 use signal_hook::{consts::SIGINT, iterator::Signals};
 use std::fs;
-use std::process::{self, Child, Command};
+use std::process::{Child, Command};
 use std::sync::mpsc;
 use std::thread;
 
@@ -21,8 +21,10 @@ fn main() -> Result<()> {
         alternatively per binary in the {:?} folder",
         args.log_files_path
     );
-    let mut diagnosis_server_handle = spawn_diagnosis_server(&args)?;
-    let client_handles = spawn_clients(&args)?;
+    fs::create_dir_all(&args.log_files_path)?;
+    let mut diagnosis_server_handle =
+        spawn_diagnosis_server(&args).context("Error launching diagnosis server")?;
+    let client_handles = spawn_clients(&args).context("Error launching clients")?;
 
     let (tx, rx) = mpsc::channel();
     let mut subscribed_signals = Signals::new(&[SIGINT])?;
@@ -60,7 +62,7 @@ fn spawn_diagnosis_server(args: &Args) -> Result<Child> {
     Ok(Command::new("target/release/diagnosisserver")
         .arg(format!("--config={}", config_path.to_str().unwrap()))
         .arg(format!("--log={}", log_path.to_str().unwrap()))
-        .arg("-vvvv")
+        .arg(format!("-{}", args.log_level))
         .spawn()?)
 }
 
@@ -79,7 +81,7 @@ fn spawn_clients(args: &Args) -> Result<Vec<Child>> {
             Command::new("target/release/client")
                 .arg(format!("--config={}", config_path.to_str().unwrap()))
                 .arg(format!("--log={}", log_path.to_str().unwrap()))
-                .arg("-vvvv")
+                .arg(format!("-{}", args.log_level))
                 .spawn()?,
         );
     }
