@@ -1,2 +1,2 @@
 [workspace]
-members = ["client", "diagnosisserver", "configurator", "exposurelib"]
+members = ["client", "diagnosisserver", "configurator", "runner", "exposurelib"]
