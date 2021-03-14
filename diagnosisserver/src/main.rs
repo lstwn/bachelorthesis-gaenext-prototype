@@ -6,6 +6,6 @@ fn main() {
     logger::setup_logger(&args.log_file_path, args.log_level, String::from("ds"));
     logger::info!("Hello from Diagnosis Server");
 
-    std::thread::sleep(std::time::Duration::from_secs(2));
+    std::thread::sleep(std::time::Duration::from_secs(10));
     logger::info!("Hello from Diagnosis Server again");
 }

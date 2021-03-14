@@ -4,11 +4,14 @@ use std::path::PathBuf;
 #[derive(Debug)]
 pub struct Args {
     pub config_files_path: PathBuf,
+    pub log_files_path: PathBuf,
 }
 
 impl Args {
     const CONFIG_FILES_PATH: &'static str = "CONFIG_FILES_PATH";
     const CONFIG_FILES_PATH_DEFAULT: &'static str = "configs";
+    const LOG_FILES_PATH: &'static str = "LOG_FILES_PATH";
+    const LGO_FILES_PATH_DEFAULT: &'static str = "logs";
 
     pub fn new() -> Self {
         let matches = App::new(crate_name!())
@@ -23,10 +26,19 @@ impl Args {
                     .default_value(Self::CONFIG_FILES_PATH_DEFAULT)
                     .help("Sets the directory in which all generated config files from the configurator reside"),
             )
+            .arg(
+                Arg::with_name(Self::LOG_FILES_PATH)
+                    .short("l")
+                    .long("log-files")
+                    .value_name("DIRECTORY")
+                    .default_value(Self::LGO_FILES_PATH_DEFAULT)
+                    .help("Sets the directory in which the log files will appear."),
+            )
             .get_matches();
 
         Self {
             config_files_path: PathBuf::from(matches.value_of(Self::CONFIG_FILES_PATH).unwrap()),
+            log_files_path: PathBuf::from(matches.value_of(Self::LOG_FILES_PATH).unwrap()),
         }
     }
 }
