@@ -3,7 +3,7 @@ use fern::Dispatch;
 use std::path::Path;
 pub use log::{error, warn, info, debug, trace};
 
-pub fn setup_logger<P: AsRef<Path>>(log_file_path: P, log_level: log::LevelFilter) {
+pub fn setup_logger<P: AsRef<Path>>(log_file_path: P, log_level: log::LevelFilter, name: String) {
     let colors = ColoredLevelConfig::new()
         .error(Color::Red)
         .warn(Color::Yellow)
@@ -16,8 +16,9 @@ pub fn setup_logger<P: AsRef<Path>>(log_file_path: P, log_level: log::LevelFilte
     let stderr_config = Dispatch::new()
         .format(move |out, message, record| {
             out.finish(format_args!(
-                "[{time}][{target}] {level:<5} {message}",
+                "[{time}][{client}][{target}] {level:<5} {message}",
                 time = chrono::Local::now().format("%H:%M:%S"),
+                client = name,
                 target = record.target(),
                 level = colors.color(record.level()),
                 message = message,

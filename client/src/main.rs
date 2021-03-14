@@ -1,9 +1,23 @@
-use exposurelib::args::{Args, crate_name, crate_version, crate_authors, crate_description};
+use anyhow::Result;
+use exposurelib::args::{crate_authors, crate_description, crate_name, crate_version, Args};
+use exposurelib::config::ClientConfig;
 use exposurelib::logger;
-use exposurelib::logger::error;
+use std::fs;
 
-fn main() {
-    let args = Args::new(crate_name!(), crate_version!(), crate_authors!(), crate_description!());
-    logger::setup_logger(&args.log_file_path, args.log_level);
-    error!("Hello, world!");
+fn main() -> Result<()> {
+    let args = Args::new(
+        crate_name!(),
+        crate_version!(),
+        crate_authors!(),
+        crate_description!(),
+    );
+    let config = fs::read_to_string(&args.config_file_path)?;
+    let config: ClientConfig = serde_yaml::from_str(&config)?;
+    logger::setup_logger(
+        &args.log_file_path,
+        args.log_level,
+        String::from(config.name()),
+    );
+    logger::info!("Hello from client {}", config.name());
+    Ok(())
 }
