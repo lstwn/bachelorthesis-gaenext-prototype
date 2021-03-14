@@ -26,6 +26,12 @@ impl ClientState {
             bluetooth_layer,
         }
     }
+    pub fn keys(&self) -> &Keys {
+        &self.keys
+    }
+    pub fn bluetooth_layer(&self) -> &BluetoothLayer {
+        &self.bluetooth_layer
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

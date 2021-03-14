@@ -3,8 +3,10 @@ use exposurelib::args::{crate_authors, crate_description, crate_name, crate_vers
 use exposurelib::config::ClientConfig;
 use exposurelib::logger;
 use std::fs;
+use tokio::net::TcpListener;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = Args::new(
         crate_name!(),
         crate_version!(),
@@ -18,6 +20,16 @@ fn main() -> Result<()> {
         args.log_level,
         String::from(config.name()),
     );
-    logger::info!("Hello from client {}", config.name());
-    Ok(())
+    logger::trace!("Client {} started", config.name());
+
+    let listener = TcpListener::bind(&config.client_endpoint).await?;
+
+    loop {
+        match listener.accept().await {
+            Ok((socket, peer_addr)) => {
+                logger::info!("Accepted new client {}", peer_addr);
+            }
+            Err(e) => logger::warn!("Could not accept client {:?}", e),
+        }
+    }
 }

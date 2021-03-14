@@ -9,9 +9,9 @@ use std::net::SocketAddr;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DiagnosisServerConfig {
-    endpoint: SocketAddr,
+    pub endpoint: SocketAddr,
     #[serde(flatten)]
-    params: SystemParams,
+    pub params: SystemParams,
 }
 
 impl DiagnosisServerConfig {

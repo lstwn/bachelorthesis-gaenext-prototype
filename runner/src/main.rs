@@ -45,9 +45,9 @@ fn main() -> Result<()> {
     });
 
     let _ = rx.recv()?;
-    diagnosis_server_handle.kill().unwrap();
+    let _ = diagnosis_server_handle.kill();
     for mut client_handle in client_handles {
-        client_handle.kill().unwrap();
+        let _ = client_handle.kill();
     }
     Ok(())
 }
