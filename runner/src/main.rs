@@ -10,7 +10,7 @@ fn main() -> Result<()> {
     println!("INFO: Assuming you have build the project in release mode, run the configurator beforehand and that the generated configurations are present in {:?}", args.config_files_path);
     println!("INFO: Press CTRL+C to stop diagnosis server and all clients");
     println!("INFO: All logs will appear in this terminal or alternatively per binary in the 'logs' folder");
-    // let diagnosis_server_handle = spawn_diagnosis_server()?;
+    let mut diagnosis_server_handle = spawn_diagnosis_server()?;
     // let client_handles = spawn_clients()?;
 
     let mut subscribed_signals = Signals::new(&[SIGINT])?;
@@ -22,6 +22,7 @@ fn main() -> Result<()> {
                         "Received SIGINT signal ({}), shutting down clients and diagnosis server..",
                         signal
                     );
+                    diagnosis_server_handle.kill().unwrap();
                 }
                 _ => unreachable!(),
             }
@@ -34,7 +35,11 @@ fn main() -> Result<()> {
 }
 
 fn spawn_diagnosis_server() -> Result<Child> {
-    todo!("");
+    Ok(Command::new("target/release/diagnosisserver")
+        .arg("--config=configs/diagnosisserver.yaml")
+        .arg("--log=logs/diagnosisserver.log")
+        .arg("-vvvv")
+        .spawn()?)
 }
 
 fn spawn_clients() -> Result<Vec<Child>> {
