@@ -27,7 +27,12 @@ pub struct KeyUpload {
     // NOTE: omitting EPK in the prototype
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ComputationId {
+    id: u32,
+}
+
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Validity<Keyring> {
     valid_from: ExposureTime,
     keyring: Keyring,
@@ -63,6 +68,15 @@ impl TryFrom<Validity<TemporaryExposureKey>> for Validity<TekKeyring> {
             valid_from: tek_validity.valid_from,
             keyring: TekKeyring::try_from(tek_validity.keyring)?,
         })
+    }
+}
+
+impl From<Validity<ExposureKeyring>> for Validity<TemporaryExposureKey> {
+    fn from(exposure_keyring_validity: Validity<ExposureKeyring>) -> Self {
+        Self {
+            valid_from: exposure_keyring_validity.valid_from,
+            keyring: TemporaryExposureKey::from(exposure_keyring_validity.keyring),
+        }
     }
 }
 
@@ -162,17 +176,23 @@ impl ExposureKeyring {
     // }
 }
 
+impl AsRef<TemporaryExposureKey> for ExposureKeyring {
+    fn as_ref(&self) -> &TemporaryExposureKey {
+        &self.tek_keyring().tek
+    }
+}
+
 /// The TEK rolling period (TEKRP) is stated in multiples of 10 minutes.
 #[derive(Copy, Clone, Serialize, Deserialize, Debug)]
 pub struct TekRollingPeriod(u16);
 
-impl std::convert::From<TekRollingPeriod> for u32 {
+impl From<TekRollingPeriod> for u32 {
     fn from(tekrp: TekRollingPeriod) -> u32 {
         tekrp.0 as u32
     }
 }
 
-impl std::convert::From<TekRollingPeriod> for Duration {
+impl From<TekRollingPeriod> for Duration {
     fn from(tekrp: TekRollingPeriod) -> Duration {
         Duration::minutes((tekrp.0 * 10) as i64)
     }
@@ -194,13 +214,13 @@ impl InfectionPeriod {
     }
 }
 
-impl std::convert::From<InfectionPeriod> for i32 {
+impl From<InfectionPeriod> for i32 {
     fn from(infection_period: InfectionPeriod) -> i32 {
         infection_period.0 as i32
     }
 }
 
-impl std::convert::From<InfectionPeriod> for usize {
+impl From<InfectionPeriod> for usize {
     fn from(infection_period: InfectionPeriod) -> usize {
         infection_period.0 as usize
     }
@@ -230,7 +250,7 @@ where
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TemporaryExposureKey {
     key: [u8; Self::KEY_LEN],
 }
@@ -252,6 +272,12 @@ impl Key for TemporaryExposureKey {
 
     fn get(&self) -> &[u8] {
         &self.key
+    }
+}
+
+impl From<ExposureKeyring> for TemporaryExposureKey {
+    fn from(exposure_keyring: ExposureKeyring) -> Self {
+        exposure_keyring.tek_keyring().tek
     }
 }
 

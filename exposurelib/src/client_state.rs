@@ -64,12 +64,15 @@ impl Keys {
         at: ExposureTime,
         tekrp: TekRollingPeriod,
     ) -> Option<&ExposureKeyring> {
-        self.keys()
+        self.all()
             .iter()
             .find_map(|validity| validity.query(at, tekrp))
     }
-    fn keys(&self) -> &VecDeque<Validity<ExposureKeyring>> {
+    pub fn all(&self) -> &VecDeque<Validity<ExposureKeyring>> {
         &self.0
+    }
+    pub fn prune(&mut self, _tekrp: TekRollingPeriod, _infection_period: InfectionPeriod) -> () {
+        unimplemented!("");
     }
 }
 
@@ -136,6 +139,9 @@ impl BluetoothLayer {
         } else {
             None
         }
+    }
+    pub fn prune(&mut self, _tekrp: TekRollingPeriod, _infection_period: InfectionPeriod) -> () {
+        unimplemented!("");
     }
 }
 

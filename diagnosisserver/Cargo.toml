@@ -10,4 +10,7 @@ edition = "2018"
 exposurelib = { path = "../exposurelib" }
 anyhow = "1.0.38"
 serde_yaml = "0.8.16"
+futures = "0.3"
+serde = { version = "1.0" }
 tokio = { version = "1.3.0", features = ['full'] }
+tarpc = { version = "0.25.1", features = ['full'] }

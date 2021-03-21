@@ -1,10 +1,11 @@
 use crate::primitives::TekRollingPeriod;
 use chrono::prelude::*;
+use chrono::Duration;
 use serde::{Deserialize, Serialize};
-use std::ops::{Add, Sub};
 use std::collections::BTreeSet;
+use std::ops::{Add, Sub};
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ExposureTime {
     en_interval_number: u32,
 }
@@ -46,14 +47,6 @@ impl From<DateTime<Utc>> for ExposureTime {
         }
     }
 }
-
-impl PartialEq for ExposureTime {
-    fn eq(&self, other: &Self) -> bool {
-        self.en_interval_number == other.en_interval_number
-    }
-}
-
-impl Eq for ExposureTime {}
 
 impl PartialOrd for ExposureTime {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -109,6 +102,51 @@ impl Sub<TekRollingPeriod> for ExposureTime {
 
 pub type ExposureTimeSet = BTreeSet<ExposureTime>;
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TimeInterval {
+    from_including: DateTime<Utc>,
+    to_excluding: DateTime<Utc>,
+}
+
+impl TimeInterval {
+    pub fn with_bounds(from_including: DateTime<Utc>, to_excluding: DateTime<Utc>) -> Self {
+        Self {
+            from_including,
+            to_excluding,
+        }
+    }
+    pub fn with_duration(from: DateTime<Utc>, duration: Duration) -> Self {
+        Self {
+            from_including: from,
+            to_excluding: from + duration,
+        }
+    }
+    pub fn with_alignment(duration: Duration) -> Self {
+        if duration <= Duration::seconds(0) {
+            panic!("Negative duration given.");
+        }
+        let last_midnight = Utc::today().and_hms(0, 0, 0);
+        let mut from_including = last_midnight;
+        loop {
+            from_including = from_including + duration;
+            if from_including >= Utc::now() {
+                break;
+            }
+        }
+        Self::with_duration(from_including, duration)
+    }
+    pub fn next_interval(&self) -> Self {
+        let from_including = self.to_excluding;
+        Self {
+            from_including,
+            to_excluding: from_including + self.duration(),
+        }
+    }
+    pub fn duration(&self) -> Duration {
+        self.to_excluding - self.from_including
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,8 +177,11 @@ mod tests {
         let tekrp = TekRollingPeriod::default();
         let exposure_time = ExposureTime::from(Utc::now());
         let tekrp_multiple = exposure_time.floor_tekrp_multiple(tekrp);
-        // floor_tekrp_multiple() must be idempotent (!)
-        assert_eq!(tekrp_multiple, tekrp_multiple.floor_tekrp_multiple(tekrp));
+        assert_eq!(
+            tekrp_multiple,
+            tekrp_multiple.floor_tekrp_multiple(tekrp),
+            "floor_tekrp_multiple() is *not* idempotent"
+        );
     }
 
     #[test]

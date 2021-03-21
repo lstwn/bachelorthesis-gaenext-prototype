@@ -1,7 +1,9 @@
 pub mod args;
-pub mod client_state;
 pub mod config;
-pub mod error;
 pub mod logger;
+pub mod error;
+pub mod client_state;
+pub mod diagnosis_server_state;
+pub mod rpcs;
 pub mod primitives;
 pub mod time;
