@@ -1,10 +1,12 @@
 mod args;
 use anyhow::{Context, Result};
 use args::Args;
+use crossbeam::channel::unbounded;
+use crossbeam::channel::{Receiver, Sender};
 use signal_hook::{consts::SIGINT, iterator::Signals};
 use std::fs;
-use std::process::{Child, Command};
-use std::sync::mpsc;
+use std::io::{BufRead, BufReader};
+use std::process::{Stdio, Child, Command};
 use std::thread;
 
 fn main() -> Result<()> {
@@ -22,11 +24,15 @@ fn main() -> Result<()> {
         args.log_files_path
     );
     fs::create_dir_all(&args.log_files_path)?;
-    let mut diagnosis_server_handle =
-        spawn_diagnosis_server(&args).context("Error launching diagnosis server")?;
-    let client_handles = spawn_clients(&args).context("Error launching clients")?;
 
-    let (tx, rx) = mpsc::channel();
+    let (output_tx, output_rx) = unbounded::<String>();
+    let (term_tx, term_rx) = unbounded::<()>();
+
+    let _ = spawn_diagnosis_server(&args, output_tx.clone(), term_rx.clone())
+        .context("Error launching diagnosis server")?;
+    let _ = spawn_clients(&args, output_tx.clone(), term_rx.clone())
+        .context("Error launching clients")?;
+
     let mut subscribed_signals = Signals::new(&[SIGINT])?;
     thread::spawn(move || {
         for signal in subscribed_signals.forever() {
@@ -37,53 +43,93 @@ fn main() -> Result<()> {
                         shutting down clients and diagnosis server..",
                         signal
                     );
-                    tx.send(true).unwrap();
+                    term_tx.send(()).unwrap();
                 }
                 _ => unreachable!(),
             }
         }
     });
 
-    let _ = rx.recv()?;
-    let _ = diagnosis_server_handle.kill();
-    for mut client_handle in client_handles {
-        let _ = client_handle.kill();
+    loop {
+        match output_rx.recv_timeout(std::time::Duration::from_secs(2)) {
+            Ok(output_line) => print!("{}", output_line),
+            Err(_) => {
+                // Optional: use another channel to await kill of other
+                // subprocesses
+                if !term_rx.is_empty() {
+                    return Ok(());
+                }
+            }
+        };
     }
-    Ok(())
 }
 
-fn spawn_diagnosis_server(args: &Args) -> Result<Child> {
+fn spawn_diagnosis_server(
+    args: &Args,
+    output_tx: Sender<String>,
+    term_rx: Receiver<()>,
+) -> Result<()> {
     let mut config_path = args.config_files_path.clone();
     config_path.push("diagnosisserver");
     config_path.set_extension("yaml");
     let mut log_path = args.log_files_path.clone();
     log_path.push("diagnosisserver");
     log_path.set_extension("log");
-    Ok(Command::new("target/release/diagnosisserver")
-        .arg(format!("--config={}", config_path.to_str().unwrap()))
-        .arg(format!("--log={}", log_path.to_str().unwrap()))
-        .arg(format!("-{}", args.log_level))
-        .spawn()?)
+    monitor_subprocess(
+        Command::new("target/release/diagnosisserver")
+            .arg(format!("--config={}", config_path.to_str().unwrap()))
+            .arg(format!("--log={}", log_path.to_str().unwrap()))
+            .arg(format!("-{}", args.log_level))
+            .stderr(Stdio::piped())
+            .spawn()?,
+        output_tx,
+        term_rx,
+    );
+    Ok(())
 }
 
-fn spawn_clients(args: &Args) -> Result<Vec<Child>> {
+fn spawn_clients(args: &Args, output_tx: Sender<String>, term_rx: Receiver<()>) -> Result<()> {
     let mut config_path = args.config_files_path.clone();
     config_path.push("clients");
     let mut log_path = args.log_files_path.clone();
     log_path.push("init");
-    let mut childs = Vec::new();
     for entry in fs::read_dir(&config_path)? {
         let entry = entry?;
         let config_path = entry.path();
         log_path.set_file_name(config_path.file_stem().unwrap());
         log_path.set_extension("log");
-        childs.push(
+        monitor_subprocess(
             Command::new("target/release/client")
                 .arg(format!("--config={}", config_path.to_str().unwrap()))
                 .arg(format!("--log={}", log_path.to_str().unwrap()))
                 .arg(format!("-{}", args.log_level))
+                .stderr(Stdio::piped())
                 .spawn()?,
+            output_tx.clone(),
+            term_rx.clone(),
         );
     }
-    Ok(childs)
+    Ok(())
+}
+
+fn monitor_subprocess(mut child: Child, output_tx: Sender<String>, term_rx: Receiver<()>) -> () {
+    thread::spawn(move || {
+        let stderr = child.stderr.take().unwrap();
+        let mut stderr = BufReader::new(stderr);
+        loop {
+            if !term_rx.is_empty() {
+                println!("Shutting down subprocess with ID {}", child.id());
+                break;
+            }
+            let mut output_line = String::new();
+            let bytes = stderr.read_line(&mut output_line).unwrap();
+            if bytes == 0 {
+                // update rate of one second for new logs after an EOF
+                thread::sleep(std::time::Duration::from_secs(1));
+                continue;
+            }
+            output_tx.send(output_line).unwrap();
+        }
+        let _ = child.kill();
+    });
 }
