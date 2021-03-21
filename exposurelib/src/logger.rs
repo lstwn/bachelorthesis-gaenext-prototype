@@ -11,7 +11,10 @@ pub fn setup_logger<P: AsRef<Path>>(log_file_path: P, log_level: log::LevelFilte
         .debug(Color::Blue)
         .trace(Color::White);
 
-    let base_config = Dispatch::new().level(log_level);
+    let base_config = Dispatch::new().level(log_level)
+        .level_for("tokio_util", log::LevelFilter::Warn)
+        .level_for("mio", log::LevelFilter::Warn)
+        .level_for("tarpc", log::LevelFilter::Warn);
 
     let stderr_config = Dispatch::new()
         .format(move |out, message, record| {
