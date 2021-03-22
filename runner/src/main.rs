@@ -8,6 +8,7 @@ use std::fs;
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::thread;
+use std::time::Duration;
 
 fn main() -> Result<()> {
     let args = Args::new();
@@ -59,7 +60,7 @@ fn main() -> Result<()> {
     });
 
     loop {
-        match output_rx.recv_timeout(std::time::Duration::from_secs(2)) {
+        match output_rx.recv_timeout(Duration::from_secs(2)) {
             Ok(output_line) => print!("{}", output_line),
             Err(_) => {
                 if !termination_request_rx.is_empty() {
@@ -88,6 +89,7 @@ fn spawn_diagnosis_server(args: &Args, channels: SubprocessChannels) -> Result<u
     log_path.push("diagnosisserver");
     log_path.set_extension("log");
     monitor_subprocess(
+        args,
         String::from("diagnosis server"),
         Command::new("target/release/diagnosisserver")
             .arg(format!("--config={}", config_path.to_str().unwrap()))
@@ -112,6 +114,7 @@ fn spawn_clients(args: &Args, channels: SubprocessChannels) -> Result<usize> {
         log_path.set_file_name(config_path.file_stem().unwrap());
         log_path.set_extension("log");
         monitor_subprocess(
+            args,
             String::from(format!(
                 "client {}",
                 config_path.file_stem().unwrap().to_str().unwrap()
@@ -129,7 +132,13 @@ fn spawn_clients(args: &Args, channels: SubprocessChannels) -> Result<usize> {
     Ok(count)
 }
 
-fn monitor_subprocess(name: String, mut child: Child, channels: SubprocessChannels) -> () {
+fn monitor_subprocess(
+    args: &Args,
+    name: String,
+    mut child: Child,
+    channels: SubprocessChannels,
+) -> () {
+    let log_refresh_rate = args.log_refresh_rate;
     thread::spawn(move || {
         let stderr = child.stderr.take().unwrap();
         let mut stderr = BufReader::new(stderr);
@@ -140,19 +149,15 @@ fn monitor_subprocess(name: String, mut child: Child, channels: SubprocessChanne
             let mut output_line = String::new();
             let bytes = stderr.read_line(&mut output_line).unwrap();
             if bytes == 0 {
-                // update rate of one second for new logs after an EOF
+                // update rate for new logs after an EOF
                 // (i.e. a logging break)
-                thread::sleep(std::time::Duration::from_secs(1));
+                thread::sleep(Duration::from_millis(log_refresh_rate));
                 continue;
             }
             channels.output_tx.send(output_line).unwrap();
         }
         let _ = child.kill();
-        println!(
-            "Killed subprocess '{}' with ID '{}'",
-            name,
-            child.id()
-        );
+        println!("Killed subprocess '{}' with ID '{}'", name, child.id());
         channels.termination_done_tx.send(()).unwrap();
     });
 }
