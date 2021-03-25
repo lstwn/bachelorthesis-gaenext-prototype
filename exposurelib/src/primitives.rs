@@ -27,9 +27,15 @@ pub struct KeyUpload {
     // NOTE: omitting EPK in the prototype
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Default, Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ComputationId {
     id: u32,
+}
+
+impl From<u32> for ComputationId {
+    fn from(int: u32) -> Self {
+        ComputationId { id: int }
+    }
 }
 
 #[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, Hash)]

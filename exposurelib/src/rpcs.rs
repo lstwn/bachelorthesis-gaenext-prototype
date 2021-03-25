@@ -1,4 +1,4 @@
-use crate::diagnosis_server_state::Chunks;
+use crate::diagnosis_server_state::Chunk;
 use crate::primitives::{ComputationId, TemporaryExposureKey, Validity};
 use crate::time::ExposureTimeSet;
 use chrono::prelude::*;
@@ -10,23 +10,23 @@ pub trait DiagnosisServer {
     async fn hello(world: String) -> String;
     async fn blacklist_upload(params: BlacklistUploadParams) -> ComputationId;
     async fn greylist_upload(params: GreylistUploadParams) -> ();
-    async fn download(params: DownloadParams) -> Chunks;
+    async fn download(params: DownloadParams) -> Vec<Chunk>;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BlacklistUploadParams {
-    diagnosis_keys: HashSet<Validity<TemporaryExposureKey>>,
+    pub diagnosis_keys: HashSet<Validity<TemporaryExposureKey>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GreylistUploadParams {
-    computation_id: ComputationId,
-    diagnosis_keys: HashSet<Validity<TemporaryExposureKey>>,
+    pub computation_id: ComputationId,
+    pub diagnosis_keys: HashSet<Validity<TemporaryExposureKey>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DownloadParams {
-    from: DateTime<Utc>,
+    pub from: DateTime<Utc>,
 }
 
 #[tarpc::service]
@@ -36,24 +36,24 @@ pub trait Forwarder {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ForwardParams {
-    computation_id: ComputationId,
-    info: Validity<ForwardInfo>,
-    shared_encounter_times: ExposureTimeSet,
+    pub computation_id: ComputationId,
+    pub info: Validity<ForwardInfo>,
+    pub shared_encounter_times: ExposureTimeSet,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ForwardInfo {
-    predecessor: PredecessorInfo,
-    origin: OriginInfo,
+    pub predecessor: PredecessorInfo,
+    pub origin: OriginInfo,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PredecessorInfo {
-    tek: TemporaryExposureKey,
+    pub tek: TemporaryExposureKey,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OriginInfo {
-    tek: TemporaryExposureKey,
+    pub tek: TemporaryExposureKey,
     // epk: EncryptedPublicKey,
 }

@@ -264,6 +264,7 @@ name = "diagnosisserver"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "exposurelib",
  "futures",
  "serde",

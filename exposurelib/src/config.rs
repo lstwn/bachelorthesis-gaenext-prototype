@@ -118,6 +118,18 @@ impl fmt::Display for Intensity {
 pub struct SystemParams {
     pub tek_rolling_period: TekRollingPeriod,
     pub infection_period: InfectionPeriod,
+    pub chunk_period: ChunkPeriod,
+}
+
+#[derive(Debug, Serialize, Deserialize, Copy, Clone)]
+pub struct ChunkPeriod {
+    inner: std::time::Duration,
+}
+
+impl std::default::Default for ChunkPeriod {
+    fn default() -> Self {
+        Self { inner: std::time::Duration::from_secs(30) }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
