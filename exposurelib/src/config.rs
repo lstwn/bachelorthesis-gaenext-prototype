@@ -1,8 +1,10 @@
 use crate::client_state::ClientState;
 use crate::primitives::*;
 use chrono::prelude::*;
+use chrono::Duration;
 use serde::{Deserialize, Serialize};
 use std::cmp;
+use std::convert::TryFrom;
 use std::fmt;
 use std::hash;
 use std::net::SocketAddr;
@@ -126,9 +128,17 @@ pub struct ChunkPeriod {
     inner: std::time::Duration,
 }
 
+impl From<ChunkPeriod> for Duration {
+    fn from(chunk_period: ChunkPeriod) -> Self {
+        Duration::from_std(chunk_period.inner).unwrap()
+    }
+}
+
 impl std::default::Default for ChunkPeriod {
     fn default() -> Self {
-        Self { inner: std::time::Duration::from_secs(30) }
+        Self {
+            inner: std::time::Duration::from_secs(30),
+        }
     }
 }
 

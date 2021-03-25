@@ -21,7 +21,7 @@ pub struct DiagnosisServerState {
 
 impl DiagnosisServerState {
     pub fn new(config: Arc<DiagnosisServerConfig>) -> Arc<Self> {
-        let chunk_period = Duration::from_std(config.params.chunk_period).unwrap();
+        let chunk_period = Duration::from(config.params.chunk_period);
         let retention_period = config
             .params
             .infection_period
