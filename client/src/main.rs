@@ -5,6 +5,7 @@ use exposurelib::logger;
 use exposurelib::rpcs;
 use serde_yaml;
 use std::fs;
+use std::sync::Arc;
 use tarpc::{client, context, tokio_serde::formats};
 
 #[tokio::main]
@@ -15,13 +16,17 @@ async fn main() -> Result<()> {
         crate_authors!(),
         crate_description!(),
     );
+
     let config = fs::read_to_string(&args.config_file_path)?;
     let config: ClientConfig = serde_yaml::from_str(&config)?;
+    let config = Arc::new(config);
+
     logger::setup_logger(
         &args.log_file_path,
         args.log_level,
         String::from(config.name()),
     );
+
     logger::trace!("Client {} started", config.name());
 
     let keys = config.state.keys();
@@ -47,8 +52,20 @@ async fn main() -> Result<()> {
     let hello = client
         .hello(context::current(), String::from(config.name()))
         .await?;
-
     logger::warn!("{}", hello);
+
+    if config.is_positively_tested() {
+        logger::warn!("Client is positively tested and announcing its TEKs to the blacklist");
+        let computation_id = client
+            .blacklist_upload(
+                context::current(),
+                rpcs::BlacklistUploadParams {
+                    diagnosis_keys: keys.all_teks(),
+                },
+            )
+            .await?;
+        logger::info!("Computation id is {:?}", computation_id);
+    }
 
     Ok(())
 }

@@ -57,7 +57,7 @@ impl DiagnosisServerState {
                 let mut done_chunks = done_chunks.lock().await;
                 let next_chunk = current_chunk.next_chunk();
                 logger::info!(
-                    "Replacing current chunk {:?} with next chunk {:?}",
+                    "Replacing current chunk with validity {:?} with next chunk with validity {:?}",
                     current_chunk.covers(),
                     next_chunk.covers()
                 );
@@ -70,12 +70,22 @@ impl DiagnosisServerState {
         // TODO: already added earlier? duplicate check!
         let mut current_chunk = self.current_chunk.lock().await;
         let computation_id = self.next_computation_id().await;
+        logger::info!(
+            "Adding {:?} to blacklist with computation id {:?}",
+            data.diagnosis_keys,
+            computation_id
+        );
         current_chunk.insert(ListType::Blacklist, computation_id, &data.diagnosis_keys);
         computation_id
     }
     pub async fn add_to_greylist(&self, data: &GreylistUploadParams) -> () {
         // TODO: already added earlier? duplicate check!
         let mut current_chunk = self.current_chunk.lock().await;
+        logger::info!(
+            "Adding {:?} to greylist with computation id {:?}",
+            data.diagnosis_keys,
+            data.computation_id
+        );
         current_chunk.insert(
             ListType::Greylist,
             data.computation_id,
@@ -84,6 +94,7 @@ impl DiagnosisServerState {
     }
     pub async fn request_chunks(&self, data: &DownloadParams) -> Vec<Chunk> {
         let done_chunks = self.done_chunks.lock().await;
+        logger::info!("Requesting chunks from {}", data.from);
         done_chunks.get_chunks(&data.from)
     }
     async fn next_computation_id(&self) -> ComputationId {
@@ -118,6 +129,11 @@ impl Chunks {
         self.inner.push_front(chunk);
         if let Some(chunk) = self.inner.back() {
             if *chunk.covers().to_excluding() <= Utc::now() - self.retention_period {
+                logger::info!(
+                    "Pruning oldest chunk with validity {:?} due to it exceeding the retention period of {:?}",
+                    chunk.covers(),
+                    self.retention_period
+                );
                 self.inner.pop_back();
             }
         }

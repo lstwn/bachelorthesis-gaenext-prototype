@@ -4,7 +4,6 @@ use chrono::prelude::*;
 use chrono::Duration;
 use serde::{Deserialize, Serialize};
 use std::cmp;
-use std::convert::TryFrom;
 use std::fmt;
 use std::hash;
 use std::net::SocketAddr;
@@ -121,6 +120,7 @@ pub struct SystemParams {
     pub tek_rolling_period: TekRollingPeriod,
     pub infection_period: InfectionPeriod,
     pub chunk_period: ChunkPeriod,
+    pub refresh_period: RefreshPeriod,
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone)]
@@ -135,6 +135,25 @@ impl From<ChunkPeriod> for Duration {
 }
 
 impl std::default::Default for ChunkPeriod {
+    fn default() -> Self {
+        Self {
+            inner: std::time::Duration::from_secs(30),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Copy, Clone)]
+pub struct RefreshPeriod {
+    inner: std::time::Duration,
+}
+
+impl From<RefreshPeriod> for Duration {
+    fn from(refresh_period: RefreshPeriod) -> Self {
+        Duration::from_std(refresh_period.inner).unwrap()
+    }
+}
+
+impl std::default::Default for RefreshPeriod {
     fn default() -> Self {
         Self {
             inner: std::time::Duration::from_secs(30),
@@ -171,5 +190,8 @@ impl ClientConfig {
     }
     pub fn name(&self) -> &str {
         &self.participant.name
+    }
+    pub fn is_positively_tested(&self) -> bool {
+        self.participant.positively_tested
     }
 }

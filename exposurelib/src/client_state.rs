@@ -2,14 +2,14 @@ use crate::config::Intensity;
 use crate::error::ExposurelibError;
 use crate::primitives::{
     AssociatedEncryptedMetadata, ExposureKeyring, InfectionPeriod, RollingProximityIdentifier,
-    TekKeyring, TekRollingPeriod, Validity,
+    TekKeyring, TekRollingPeriod, TemporaryExposureKey, Validity,
 };
 use crate::time::{ExposureTime, ExposureTimeSet};
 use chrono::prelude::*;
 use chrono::Duration;
 use ring::rand::SecureRandom;
 use serde::{Deserialize, Serialize};
-use std::collections::{btree_set::Union, BTreeMap, VecDeque};
+use std::collections::{btree_set::Union, BTreeMap, HashSet, VecDeque};
 use std::net::SocketAddr;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -71,8 +71,15 @@ impl Keys {
     pub fn all(&self) -> &VecDeque<Validity<ExposureKeyring>> {
         &self.0
     }
+    pub fn all_teks(&self) -> HashSet<Validity<TemporaryExposureKey>> {
+        self.all()
+            .iter()
+            .cloned()
+            .map(|exposure_keyring| Validity::<TemporaryExposureKey>::from(exposure_keyring))
+            .collect()
+    }
     pub fn prune(&mut self, _tekrp: TekRollingPeriod, _infection_period: InfectionPeriod) -> () {
-        unimplemented!("");
+        unimplemented!("Here a retention period could be implemented");
     }
 }
 
