@@ -121,43 +121,57 @@ pub struct SystemParams {
     pub infection_period: InfectionPeriod,
     pub chunk_period: ChunkPeriod,
     pub refresh_period: RefreshPeriod,
+    pub computation_period: ComputationPeriod,
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone)]
-pub struct ChunkPeriod {
-    inner: std::time::Duration,
-}
+pub struct ChunkPeriod(std::time::Duration);
 
 impl From<ChunkPeriod> for Duration {
     fn from(chunk_period: ChunkPeriod) -> Self {
-        Duration::from_std(chunk_period.inner).unwrap()
+        Duration::from_std(chunk_period.0).unwrap()
     }
 }
 
 impl std::default::Default for ChunkPeriod {
     fn default() -> Self {
-        Self {
-            inner: std::time::Duration::from_secs(30),
-        }
+        Self(std::time::Duration::from_secs(30))
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone)]
-pub struct RefreshPeriod {
-    inner: std::time::Duration,
+pub struct RefreshPeriod(std::time::Duration);
+
+impl From<RefreshPeriod> for std::time::Duration {
+    fn from(refresh_period: RefreshPeriod) -> Self {
+        refresh_period.0
+    }
 }
 
 impl From<RefreshPeriod> for Duration {
     fn from(refresh_period: RefreshPeriod) -> Self {
-        Duration::from_std(refresh_period.inner).unwrap()
+        Duration::from_std(refresh_period.0).unwrap()
     }
 }
 
 impl std::default::Default for RefreshPeriod {
     fn default() -> Self {
-        Self {
-            inner: std::time::Duration::from_secs(30),
-        }
+        Self(std::time::Duration::from_secs(30))
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Copy, Clone)]
+pub struct ComputationPeriod(std::time::Duration);
+
+impl From<ComputationPeriod> for Duration {
+    fn from(computation_period: ComputationPeriod) -> Self {
+        Duration::from_std(computation_period.0).unwrap()
+    }
+}
+
+impl std::default::Default for ComputationPeriod {
+    fn default() -> Self {
+        Self(std::time::Duration::from_secs(10 * 60))
     }
 }
 

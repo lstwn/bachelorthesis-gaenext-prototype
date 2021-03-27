@@ -11,12 +11,14 @@ use ring::rand::SecureRandom;
 use serde::{Deserialize, Serialize};
 use std::collections::{btree_set::Union, BTreeMap, HashSet, VecDeque};
 use std::net::SocketAddr;
+use std::hash::{Hash, Hasher};
+use std::cmp::{Eq, PartialEq};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ClientState {
     // sorted after age, i.e. newest in the front, oldest in the back
-    keys: Keys,
-    bluetooth_layer: BluetoothLayer,
+    pub keys: Keys,
+    pub bluetooth_layer: BluetoothLayer,
 }
 
 impl ClientState {
@@ -104,7 +106,7 @@ impl BluetoothLayer {
             .or_insert(Vec::new());
         encounters_at_exposure_time.push(traced_contact);
     }
-    pub fn matches(&self, with: Validity<TekKeyring>) -> Option<Matches> {
+    pub fn match_with(&self, with: Validity<TekKeyring>) -> Option<Match> {
         // assert!(with.valid_from() == with.valid_from().floor_tekrp_multiple(tekrp));
         let encounters_at_tekrp_multiple = match self.traced_contacts.get(&with.valid_from()) {
             Some(encounters_at_exposure_time) => encounters_at_exposure_time,
@@ -142,7 +144,12 @@ impl BluetoothLayer {
         }
 
         if socket_addr.is_some() {
-            Some(Matches::new(socket_addr.unwrap(), high_risk, low_risk))
+            Some(Match::new(
+                socket_addr.unwrap(),
+                Validity::<TemporaryExposureKey>::from(with),
+                high_risk,
+                low_risk,
+            ))
         } else {
             None
         }
@@ -152,21 +159,24 @@ impl BluetoothLayer {
     }
 }
 
-#[derive(Debug)]
-pub struct Matches {
+#[derive(Debug, Eq)]
+pub struct Match {
     socket_addr: SocketAddr,
+    tek: Validity<TemporaryExposureKey>,
     high_risk: ExposureTimeSet,
     low_risk: ExposureTimeSet,
 }
 
-impl Matches {
+impl Match {
     pub fn new(
         socket_addr: SocketAddr,
+        tek: Validity<TemporaryExposureKey>,
         high_risk: ExposureTimeSet,
         low_risk: ExposureTimeSet,
     ) -> Self {
         Self {
             socket_addr,
+            tek,
             high_risk,
             low_risk,
         }
@@ -182,6 +192,18 @@ impl Matches {
     }
     pub fn any_risk(&self) -> Union<ExposureTime> {
         self.high_risk.union(self.low_risk())
+    }
+}
+
+impl PartialEq for Match {
+    fn eq(&self, other: &Self) -> bool {
+        self.tek == other.tek
+    }
+}
+
+impl Hash for Match {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.tek.hash(state);
     }
 }
 

@@ -86,6 +86,15 @@ impl From<Validity<ExposureKeyring>> for Validity<TemporaryExposureKey> {
     }
 }
 
+impl From<Validity<TekKeyring>> for Validity<TemporaryExposureKey> {
+    fn from(tek_keyring_validity: Validity<TekKeyring>) -> Self {
+        Self {
+            valid_from: tek_keyring_validity.valid_from,
+            keyring: TemporaryExposureKey::from(tek_keyring_validity.keyring),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TekKeyring {
     tek: TemporaryExposureKey,
@@ -284,6 +293,12 @@ impl Key for TemporaryExposureKey {
 impl From<ExposureKeyring> for TemporaryExposureKey {
     fn from(exposure_keyring: ExposureKeyring) -> Self {
         exposure_keyring.tek_keyring().tek
+    }
+}
+
+impl From<TekKeyring> for TemporaryExposureKey {
+    fn from(tek_keyring: TekKeyring) -> Self {
+        tek_keyring.tek
     }
 }
 

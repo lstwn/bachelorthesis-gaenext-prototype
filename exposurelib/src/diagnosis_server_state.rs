@@ -1,12 +1,9 @@
 use crate::primitives::{
-    ComputationId, InfectionPeriod, TekRollingPeriod, TemporaryExposureKey, Validity,
+    ComputationId, TemporaryExposureKey, Validity,
 };
 use crate::time::TimeInterval;
-use chrono::prelude::*;
-use chrono::Duration;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::rc::Rc;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum ListType {
@@ -48,6 +45,9 @@ impl Chunk {
     pub fn covers(&self) -> &TimeInterval {
         &self.covers
     }
+    pub fn data(&self) -> &HashMap<ComputationId, ComputationState> {
+        &self.data
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -76,5 +76,11 @@ impl ComputationState {
                 self.greylist.extend(data);
             }
         }
+    }
+    pub fn blacklist(&self) -> &HashSet<Validity<TemporaryExposureKey>> {
+        &self.blacklist
+    }
+    pub fn greylist(&self) -> &HashSet<Validity<TemporaryExposureKey>> {
+        &self.greylist
     }
 }

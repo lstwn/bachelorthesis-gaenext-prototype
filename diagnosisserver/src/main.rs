@@ -1,20 +1,16 @@
-mod actor;
-use actor::DiagnosisServerState;
+mod state;
+mod handler;
+use state::DiagnosisServerState;
 use anyhow::Result;
+use handler::ConnectionHandler;
 use exposurelib::args::{crate_authors, crate_description, crate_name, crate_version, Args};
 use exposurelib::config::DiagnosisServerConfig;
-use exposurelib::diagnosis_server_state::Chunk;
 use exposurelib::logger;
-use exposurelib::primitives::ComputationId;
-use exposurelib::rpcs::{
-    BlacklistUploadParams, DiagnosisServer, DownloadParams, GreylistUploadParams,
-};
+use exposurelib::rpcs::DiagnosisServer;
 use futures::{future, prelude::*};
 use std::fs;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use tarpc::{
-    context::Context,
     server::{self, Channel},
     tokio_serde::formats,
 };
@@ -60,55 +56,3 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-#[derive(Clone)]
-pub struct ConnectionHandler {
-    peer_addr: SocketAddr,
-    state: Arc<DiagnosisServerState>,
-}
-
-impl ConnectionHandler {
-    fn new(peer_addr: SocketAddr, state: Arc<DiagnosisServerState>) -> Self {
-        Self { peer_addr, state }
-    }
-}
-
-#[tarpc::server]
-impl DiagnosisServer for ConnectionHandler {
-    async fn hello(self, _context: Context, world: String) -> String {
-        format!(
-            "Hi {} at {:?} from Diagnosis Server!",
-            world, self.peer_addr
-        )
-    }
-    async fn blacklist_upload(
-        self,
-        _context: Context,
-        params: BlacklistUploadParams,
-    ) -> ComputationId {
-        logger::debug!(
-            "New blacklist_upload() RPC from {:?} with context {:?} and params {:?}",
-            self.peer_addr,
-            _context,
-            params
-        );
-        self.state.add_to_blacklist(&params).await
-    }
-    async fn greylist_upload(self, context: Context, params: GreylistUploadParams) -> () {
-        logger::debug!(
-            "New greylist_upload() RPC from {:?} with context {:?} and params {:?}",
-            self.peer_addr,
-            context,
-            params
-        );
-        self.state.add_to_greylist(&params).await
-    }
-    async fn download(self, context: Context, params: DownloadParams) -> Vec<Chunk> {
-        logger::debug!(
-            "New download() RPC from {:?} with context {:?} and params {:?}",
-            self.peer_addr,
-            context,
-            params
-        );
-        self.state.request_chunks(&params).await
-    }
-}
