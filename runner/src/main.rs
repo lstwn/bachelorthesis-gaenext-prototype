@@ -38,6 +38,8 @@ fn main() -> Result<()> {
 
     let mut subprocesses = spawn_diagnosis_server(&args, subprocess_channels.clone())
         .context("Error launching diagnosis server")?;
+    // let's wait a bit until the diagnosis server is up and running
+    thread::sleep(Duration::from_secs(2));
     subprocesses +=
         spawn_clients(&args, subprocess_channels.clone()).context("Error launching clients")?;
 
@@ -143,6 +145,7 @@ fn monitor_subprocess(
         let stderr = child.stderr.take().unwrap();
         let mut stderr = BufReader::new(stderr);
         loop {
+            // TODO: batched read instead of line by line read
             if !channels.termination_request_rx.is_empty() {
                 break;
             }

@@ -95,6 +95,12 @@ impl From<Validity<TekKeyring>> for Validity<TemporaryExposureKey> {
     }
 }
 
+impl PartialEq<Validity<TemporaryExposureKey>> for Validity<ExposureKeyring> {
+    fn eq(&self, other: &Validity<TemporaryExposureKey>) -> bool {
+        self.valid_from == other.valid_from && self.keyring().tek_keyring().tek == *other.keyring()
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TekKeyring {
     tek: TemporaryExposureKey,

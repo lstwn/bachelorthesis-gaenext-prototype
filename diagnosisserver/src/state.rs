@@ -94,7 +94,7 @@ impl DiagnosisServerState {
     }
     pub async fn request_chunks(&self, data: &DownloadParams) -> Vec<Chunk> {
         let done_chunks = self.done_chunks.lock().await;
-        logger::info!("Requesting chunks from {}", data.from);
+        logger::info!("Client requests chunks from {}", data.from);
         done_chunks.get_chunks(&data.from)
     }
     async fn next_computation_id(&self) -> ComputationId {
@@ -141,7 +141,7 @@ impl Chunks {
     fn get_chunks(&self, from: &DateTime<Utc>) -> Vec<Chunk> {
         self.inner
             .iter()
-            .skip_while(|chunk| !chunk.covers().contains(from))
+            .skip_while(|chunk| !chunk.covers().before(from))
             .cloned()
             .collect()
     }

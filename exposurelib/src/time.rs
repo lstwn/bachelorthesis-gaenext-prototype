@@ -149,8 +149,13 @@ impl TimeInterval {
         }
     }
     pub fn contains(&self, time: &DateTime<Utc>) -> bool {
-        *time - self.from_including >= Duration::zero()
-            && self.to_excluding - *time > Duration::zero()
+        !self.before(time) && !self.after(time)
+    }
+    pub fn before(&self, time: &DateTime<Utc>) -> bool {
+        self.from_including - *time > Duration::zero()
+    }
+    pub fn after(&self, time: &DateTime<Utc>) -> bool {
+        *time - self.to_excluding >= Duration::zero()
     }
     pub fn duration(&self) -> Duration {
         self.to_excluding - self.from_including
@@ -222,6 +227,10 @@ mod tests {
         let to_excluding = Utc.ymd(2021, 03, 20).and_hms(12, 30, 00);
         let interval = TimeInterval::with_bounds(from_including, to_excluding);
         assert_eq!(Duration::minutes(30), interval.duration());
+        assert!(!interval.before(&from_including));
+        assert!(!interval.after(&from_including));
+        assert!(!interval.before(&&to_excluding));
+        assert!(interval.after(&to_excluding));
         assert!(interval.contains(&from_including));
         assert!(!interval.contains(&to_excluding));
         assert!(interval.contains(&Utc.ymd(2021, 03, 20).and_hms(12, 15, 00)));

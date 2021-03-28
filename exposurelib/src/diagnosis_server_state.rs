@@ -1,11 +1,9 @@
-use crate::primitives::{
-    ComputationId, TemporaryExposureKey, Validity,
-};
+use crate::primitives::{ComputationId, TemporaryExposureKey, Validity};
 use crate::time::TimeInterval;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ListType {
     Blacklist,
     Greylist,
@@ -45,8 +43,8 @@ impl Chunk {
     pub fn covers(&self) -> &TimeInterval {
         &self.covers
     }
-    pub fn data(&self) -> &HashMap<ComputationId, ComputationState> {
-        &self.data
+    pub fn to_data(self) -> HashMap<ComputationId, ComputationState> {
+        self.data
     }
 }
 
@@ -63,11 +61,7 @@ impl ComputationState {
             greylist: HashSet::new(),
         }
     }
-    pub fn insert(
-        &mut self,
-        list: ListType,
-        data: &HashSet<Validity<TemporaryExposureKey>>,
-    ) -> () {
+    pub fn insert(&mut self, list: ListType, data: &HashSet<Validity<TemporaryExposureKey>>) -> () {
         match list {
             ListType::Blacklist => {
                 self.blacklist.extend(data);
@@ -82,5 +76,13 @@ impl ComputationState {
     }
     pub fn greylist(&self) -> &HashSet<Validity<TemporaryExposureKey>> {
         &self.greylist
+    }
+    pub fn to_data(
+        self,
+    ) -> (
+        HashSet<Validity<TemporaryExposureKey>>,
+        HashSet<Validity<TemporaryExposureKey>>,
+    ) {
+        (self.blacklist, self.greylist)
     }
 }

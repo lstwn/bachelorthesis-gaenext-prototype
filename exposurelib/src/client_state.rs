@@ -9,10 +9,10 @@ use chrono::prelude::*;
 use chrono::Duration;
 use ring::rand::SecureRandom;
 use serde::{Deserialize, Serialize};
-use std::collections::{btree_set::Union, BTreeMap, HashSet, VecDeque};
-use std::net::SocketAddr;
-use std::hash::{Hash, Hasher};
 use std::cmp::{Eq, PartialEq};
+use std::collections::{btree_set::Union, BTreeMap, HashSet, VecDeque};
+use std::hash::{Hash, Hasher};
+use std::net::SocketAddr;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ClientState {
@@ -80,8 +80,14 @@ impl Keys {
             .map(|exposure_keyring| Validity::<TemporaryExposureKey>::from(exposure_keyring))
             .collect()
     }
+    pub fn is_own_tek(&self, tek: &Validity<TemporaryExposureKey>) -> bool {
+        self.all()
+            .iter()
+            .find(|exposure_keyring| **exposure_keyring == *tek)
+            .is_some()
+    }
     pub fn prune(&mut self, _tekrp: TekRollingPeriod, _infection_period: InfectionPeriod) -> () {
-        unimplemented!("Here a retention period could be implemented");
+        unimplemented!("A retention period could be implemented here");
     }
 }
 
@@ -183,6 +189,9 @@ impl Match {
     }
     pub fn connection_identifier(&self) -> SocketAddr {
         self.socket_addr
+    }
+    pub fn tek(&self) -> &Validity<TemporaryExposureKey> {
+        &self.tek
     }
     pub fn high_risk(&self) -> &ExposureTimeSet {
         &self.high_risk
