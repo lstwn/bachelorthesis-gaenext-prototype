@@ -1,3 +1,4 @@
+use crate::listener::ForwarderServer;
 use anyhow::{Context, Result};
 use chrono::prelude::*;
 use exposurelib::config::{ClientConfig, Participant, SystemParams};
@@ -29,6 +30,7 @@ pub struct ClientState {
     keys: Arc<Mutex<Keys>>,
     bluetooth_layer: Arc<Mutex<BluetoothLayer>>,
     diagnosis_server_client: Arc<rpcs::DiagnosisServerClient>,
+    forwarder_server: Arc<ForwarderServer>,
 }
 
 impl ClientState {
@@ -48,7 +50,10 @@ impl ClientState {
             formats::Bincode::default,
         );
         transport.config_mut().max_frame_length(usize::MAX);
-        let transport = transport.await.context("Error creating TCP transport")?;
+        let transport = transport.await.context(format!(
+            "Error creating TCP Bincode connect with diagnosis server at {:?}",
+            config.diagnosis_server_endpoint
+        ))?;
         let diagnosis_server_client = Arc::new(
             rpcs::DiagnosisServerClient::new(client::Config::default(), transport)
                 .spawn()
@@ -63,9 +68,13 @@ impl ClientState {
             keys,
             bluetooth_layer,
             diagnosis_server_client,
+            forwarder_server: ForwarderServer::new(
+                config.client_endpoint,
+                config.params.computation_period,
+            ),
         });
         loop {
-            match client_state.init().await {
+            match Arc::clone(&client_state).init().await {
                 Ok(_) => break,
                 Err(err) => {
                     logger::error!("Error while announcing DKs to blacklist: {}", err);
@@ -81,13 +90,16 @@ impl ClientState {
         let handle = client_state.update().await;
         Ok(handle)
     }
-    async fn init(&self) -> Result<()> {
+    async fn init(self: Arc<Self>) -> Result<()> {
         if self.participant.positively_tested {
             logger::warn!("Client is positively tested and announcing its TEKs to the blacklist");
             let diagnosis_keys = {
                 let keys = self.keys.lock().await;
                 keys.all_teks()
             };
+            Arc::clone(&self.forwarder_server)
+                .request(Arc::clone(&self))
+                .await;
             let computation_id = self
                 .diagnosis_server_client
                 .blacklist_upload(
@@ -98,7 +110,6 @@ impl ClientState {
             self.add_computation(computation_id, Computation::default())
                 .await;
         }
-        // TODO: LISTEN ON PORTS!!!
         Ok(())
     }
     async fn update(self: Arc<Self>) -> JoinHandle<()> {
@@ -133,14 +144,14 @@ impl ClientState {
                     if *chunk.covers().to_excluding() > next_last_download {
                         next_last_download = chunk.covers().to_excluding().clone();
                     }
-                    self.process_chunk(chunk).await;
+                    Arc::clone(&self).process_chunk(chunk).await;
                 }
                 let mut last_download = self.last_download.lock().await;
                 *last_download = next_last_download;
             }
         })
     }
-    async fn process_chunk(&self, chunk: Chunk) -> () {
+    async fn process_chunk(self: Arc<Self>, chunk: Chunk) -> () {
         let bluetooth_layer = self.bluetooth_layer.lock().await;
         let filter_match = |tek| match Validity::<TekKeyring>::try_from(tek) {
             Ok(tek) => bluetooth_layer.match_with(tek),
@@ -163,12 +174,20 @@ impl ClientState {
                 }
             };
             for matched in blacklist.into_iter().filter_map(filter_match) {
-                self.on_tek_match(matched, ListType::Blacklist, computation_id)
-                    .await;
+                if let Err(e) = Arc::clone(&self)
+                    .on_tek_match(matched, ListType::Blacklist, computation_id)
+                    .await
+                {
+                    logger::error!("Error during blacklist TEK match event: {}", e);
+                }
             }
             for matched in greylist.into_iter().filter_map(filter_match) {
-                self.on_tek_match(matched, ListType::Greylist, computation_id)
-                    .await;
+                if let Err(e) = Arc::clone(&self)
+                    .on_tek_match(matched, ListType::Greylist, computation_id)
+                    .await
+                {
+                    logger::error!("Error during greylist TEK match event: {}", e);
+                }
             }
         }
     }
@@ -185,18 +204,11 @@ impl ClientState {
         };
     }
     async fn on_tek_match(
-        &self,
+        self: Arc<Self>,
         matched: Match,
         from: ListType,
         computation_id: ComputationId,
-    ) -> () {
-        logger::info!(
-            "TODO: on TEK match: Matched {:?} from {:?} with comp id {:?}",
-            matched,
-            from,
-            computation_id
-        );
-        let computations = self.computations.lock().await;
+    ) -> Result<()> {
         if from == ListType::Blacklist {
             if !matched.high_risk().is_empty() {
                 logger::warn!(
@@ -209,18 +221,66 @@ impl ClientState {
             }
         }
         if matched.high_risk().is_empty() {
-            return;
+            logger::info!("Skipping TEK match due missing high risk encounter");
+            return Ok(());
         }
+        let mut computations = self.computations.lock().await;
         if let Some(computation) = computations.get(&computation_id) {
-            if from == ListType::Greylist && computation.redlist.contains(matched.tek()) {
-                return;
+            if from == ListType::Greylist && computation.redlist().contains(matched.tek()) {
+                logger::info!("Skipping TEK match due to redlist and greylist presence");
+                return Ok(());
             }
         }
-        // TODO: get own tek of match !
-        // TODO: add to computations, listen on ports and initiate forwarding of own tek
+        let keys = self.keys.lock().await;
+        let tekrp = self.system_params.tek_rolling_period;
+        let valid_from = matched.tek().valid_from();
+        let own_tek = match keys.exposure_keyring(valid_from, tekrp) {
+            Some(exposure_keyring) => Validity::new(
+                valid_from,
+                tekrp,
+                TemporaryExposureKey::from(exposure_keyring.clone()),
+            ),
+            None => unreachable!("There should *always* be an own TEK for a tekrp during which a foreign TEK was matched"),
+        };
+        let client = Self::get_forwarder_client(matched.connection_identifier()).await?;
+        Arc::clone(&self.forwarder_server)
+            .request(Arc::clone(&self))
+            .await;
+        client
+            .forward(
+                context::current(),
+                ForwardParams::new(
+                    computation_id,
+                    valid_from,
+                    tekrp,
+                    own_tek.to_keyring(),
+                    matched.high_risk().clone(),
+                ),
+            )
+            .await
+            .context("Error while sending first forward from origin")?;
+        let computation = computations
+            .entry(computation_id)
+            .or_insert(Computation::default());
+        computation.successors().insert(matched);
+        Ok(())
     }
-    pub async fn on_tek_forward(&self, params: &ForwardParams) -> () {
-        // upload, if I'm the pooling node!
+    pub async fn get_forwarder_client(endpoint: SocketAddr) -> Result<rpcs::ForwarderClient> {
+        let mut transport =
+            tarpc::serde_transport::tcp::connect(&endpoint, formats::Bincode::default);
+        transport.config_mut().max_frame_length(usize::MAX);
+        let transport = transport.await.context(format!(
+            "Error creating TCP Bincode connect with client at {:?}",
+            endpoint
+        ))?;
+        rpcs::ForwarderClient::new(client::Config::default(), transport)
+            .spawn()
+            .context("Error spawning forwarder client")
+    }
+    pub async fn on_tek_forward(self: Arc<Self>, params: &ForwardParams) -> () {
+        logger::info!("YES! {:?}", params);
+        // check if high risk match and not empty
+        // upload, if I'm the pooling node! otherwise forward
     }
 }
 
@@ -233,5 +293,14 @@ pub struct Computation {
 impl Computation {
     pub fn is_own(&self) -> bool {
         self.successors.is_empty()
+    }
+    pub fn successors(&mut self) -> &mut HashSet<Match> {
+        &mut self.successors
+    }
+    pub fn redlist(&self) -> &HashSet<Validity<TemporaryExposureKey>> {
+        &self.redlist
+    }
+    pub fn redlist_mut(&mut self) -> &mut HashSet<Validity<TemporaryExposureKey>> {
+        &mut self.redlist
     }
 }

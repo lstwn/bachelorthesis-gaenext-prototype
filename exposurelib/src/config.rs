@@ -163,6 +163,12 @@ impl std::default::Default for RefreshPeriod {
 #[derive(Debug, Serialize, Deserialize, Copy, Clone)]
 pub struct ComputationPeriod(std::time::Duration);
 
+impl From<ComputationPeriod> for std::time::Duration {
+    fn from(computation_period: ComputationPeriod) -> Self {
+        computation_period.0
+    }
+}
+
 impl From<ComputationPeriod> for Duration {
     fn from(computation_period: ComputationPeriod) -> Self {
         Duration::from_std(computation_period.0).unwrap()

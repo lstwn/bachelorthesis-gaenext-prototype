@@ -1,6 +1,6 @@
-use crate::diagnosis_server_state::Chunk;
-use crate::primitives::{ComputationId, TemporaryExposureKey, Validity};
+use crate::primitives::{ComputationId, TekRollingPeriod, TemporaryExposureKey, Validity};
 use crate::time::ExposureTimeSet;
+use crate::{diagnosis_server_state::Chunk, time::ExposureTime};
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -41,6 +41,32 @@ pub struct ForwardParams {
     pub shared_encounter_times: ExposureTimeSet,
 }
 
+impl ForwardParams {
+    pub fn new(
+        computation_id: ComputationId,
+        valid_from: ExposureTime,
+        tekrp: TekRollingPeriod,
+        own_tek: TemporaryExposureKey,
+        shared_encounter_times: ExposureTimeSet,
+    ) -> Self {
+        let forward_info = ForwardInfo {
+            predecessor: PredecessorInfo::new(own_tek),
+            origin: OriginInfo::new(own_tek),
+        };
+        Self {
+            computation_id,
+            info: Validity::new(valid_from, tekrp, forward_info),
+            shared_encounter_times,
+        }
+    }
+    pub fn update(&mut self) -> () {
+        todo!()
+    }
+    pub fn is_first_forward(&self) -> bool {
+        self.info.keyring().origin.tek == self.info.keyring().predecessor.tek
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ForwardInfo {
     pub predecessor: PredecessorInfo,
@@ -52,8 +78,23 @@ pub struct PredecessorInfo {
     pub tek: TemporaryExposureKey,
 }
 
+impl PredecessorInfo {
+    pub fn new(origin_tek: TemporaryExposureKey) -> Self {
+        Self { tek: origin_tek }
+    }
+    pub fn update(&mut self, next_predecessor_tek: TemporaryExposureKey) -> () {
+        self.tek = next_predecessor_tek;
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OriginInfo {
     pub tek: TemporaryExposureKey,
     // epk: EncryptedPublicKey,
+}
+
+impl OriginInfo {
+    pub fn new(origin_tek: TemporaryExposureKey) -> Self {
+        Self { tek: origin_tek }
+    }
 }

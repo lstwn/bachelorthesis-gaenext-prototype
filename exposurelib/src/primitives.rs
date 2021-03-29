@@ -54,6 +54,9 @@ impl<Keyring> Validity<Keyring> {
     pub fn keyring(&self) -> &Keyring {
         &self.keyring
     }
+    pub fn to_keyring(self) -> Keyring {
+        self.keyring
+    }
     pub fn valid_from(&self) -> ExposureTime {
         self.valid_from
     }
