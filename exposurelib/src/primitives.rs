@@ -54,6 +54,9 @@ impl<Keyring> Validity<Keyring> {
     pub fn keyring(&self) -> &Keyring {
         &self.keyring
     }
+    pub fn keyring_mut(&mut self) -> &mut Keyring {
+        &mut self.keyring
+    }
     pub fn to_keyring(self) -> Keyring {
         self.keyring
     }

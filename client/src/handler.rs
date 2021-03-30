@@ -26,6 +26,8 @@ impl Forwarder for ConnectionHandler {
             context,
             params
         );
-        self.state.on_tek_forward(&params).await
+        if let Err(e) = self.state.on_tek_forward(params).await {
+            logger::warn!("Error while forwarding TEK: {:?}", e);
+        }
     }
 }

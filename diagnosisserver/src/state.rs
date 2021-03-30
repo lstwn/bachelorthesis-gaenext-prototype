@@ -51,7 +51,7 @@ impl DiagnosisServerState {
                         .to_std()
                         .unwrap_or_else(|_| std::time::Duration::from_millis(0))
                 };
-                logger::info!("Sleeping for {:?} before advancing next chunk", sleep);
+                logger::debug!("Sleeping for {:?} before advancing next chunk", sleep);
                 time::sleep(sleep).await;
                 let mut current_chunk = current_chunk.lock().await;
                 let mut done_chunks = done_chunks.lock().await;

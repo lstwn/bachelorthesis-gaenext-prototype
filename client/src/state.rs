@@ -6,7 +6,10 @@ use exposurelib::diagnosis_server_state::Chunk;
 use exposurelib::logger;
 use exposurelib::primitives::*;
 use exposurelib::rpcs;
-use exposurelib::rpcs::{DownloadParams, ForwardParams};
+use exposurelib::rpcs::{
+    BlacklistUploadParams, DownloadParams, ForwardParams, GreylistUploadParams,
+};
+use exposurelib::time::ExposureTimeSet;
 use exposurelib::{
     client_state::{BluetoothLayer, Keys, Match},
     diagnosis_server_state::ListType,
@@ -102,10 +105,7 @@ impl ClientState {
                 .await;
             let computation_id = self
                 .diagnosis_server_client
-                .blacklist_upload(
-                    context::current(),
-                    rpcs::BlacklistUploadParams { diagnosis_keys },
-                )
+                .blacklist_upload(context::current(), BlacklistUploadParams { diagnosis_keys })
                 .await?;
             self.add_computation(computation_id, Computation::default())
                 .await;
@@ -242,10 +242,10 @@ impl ClientState {
             ),
             None => unreachable!("There should *always* be an own TEK for a tekrp during which a foreign TEK was matched"),
         };
-        let client = Self::get_forwarder_client(matched.connection_identifier()).await?;
         Arc::clone(&self.forwarder_server)
             .request(Arc::clone(&self))
             .await;
+        let client = Self::get_forwarder_client(matched.connection_identifier()).await?;
         client
             .forward(
                 context::current(),
@@ -262,7 +262,7 @@ impl ClientState {
         let computation = computations
             .entry(computation_id)
             .or_insert(Computation::default());
-        computation.successors().insert(matched);
+        computation.successors_mut().insert(matched);
         Ok(())
     }
     pub async fn get_forwarder_client(endpoint: SocketAddr) -> Result<rpcs::ForwarderClient> {
@@ -277,10 +277,89 @@ impl ClientState {
             .spawn()
             .context("Error spawning forwarder client")
     }
-    pub async fn on_tek_forward(self: Arc<Self>, params: &ForwardParams) -> () {
-        logger::info!("YES! {:?}", params);
-        // check if high risk match and not empty
-        // upload, if I'm the pooling node! otherwise forward
+    pub async fn on_tek_forward(self: Arc<Self>, params: ForwardParams) -> Result<()> {
+        let tekrp = self.system_params.tek_rolling_period;
+        let predecessor_tek = params.predecessor_tek(tekrp);
+        let predecessor_tek_keyring = Validity::<TekKeyring>::try_from(predecessor_tek.clone())
+            .context("Error deriving RPIK and AEMK from TEK")?;
+        let bluetooth_layer = self.bluetooth_layer.lock().await;
+        let matched = match bluetooth_layer.match_with(predecessor_tek_keyring) {
+            Some(matched) => matched,
+            None => {
+                logger::info!("Dropping TEK forwarding due to missing match");
+                return Ok(());
+            }
+        };
+        let computation_id = params.computation_id();
+        let mut computations = self.computations.lock().await;
+        let computation = match computations.get_mut(&computation_id) {
+            Some(computation) => computation,
+            None => {
+                logger::info!(
+                    "Dropping TEK forwarding due to unknown computation {:?}",
+                    computation_id
+                );
+                return Ok(());
+            }
+        };
+        if params.is_first_forward() {
+            computation.redlist_mut().insert(predecessor_tek);
+        }
+        if !computation.redlist().contains(&predecessor_tek) {
+            logger::info!("Dropping TEK forwarding due to missing entry of predecessor in the computation's redlist");
+            return Ok(());
+        }
+        let shared_encounter_times: ExposureTimeSet = matched
+            .high_risk()
+            .intersection(params.shared_encounter_times())
+            .cloned()
+            .collect();
+        if shared_encounter_times.is_empty() {
+            logger::info!("Dropping TEK forwarding due to a missing shared encounter time");
+            return Ok(());
+        }
+        if computation.is_own() {
+            let mut diagnosis_keys = HashSet::with_capacity(1);
+            diagnosis_keys.insert(params.origin_tek(tekrp));
+            // TODO: retry strategy
+            self.diagnosis_server_client
+                .greylist_upload(
+                    context::current(),
+                    GreylistUploadParams {
+                        computation_id,
+                        diagnosis_keys,
+                    },
+                )
+                .await
+                .context("Pooling node could not upload received DK to greylist")?;
+        } else {
+            let valid_from = matched.tek().valid_from();
+            let keys = self.keys.lock().await;
+            let own_tek = match keys.exposure_keyring(valid_from, tekrp) {
+                Some(exposure_keyring) =>
+                TemporaryExposureKey::from(exposure_keyring.clone()),
+                None => unreachable!("There should *always* be an own TEK for a tekrp during which a foreign TEK was matched"),
+            };
+            for successor in computation.successors() {
+                let next_shared_encounter_times: ExposureTimeSet = shared_encounter_times
+                    .intersection(successor.high_risk())
+                    .cloned()
+                    .collect();
+                if next_shared_encounter_times.is_empty() {
+                    logger::info!("Skipping forwarding to successor candidate due to a missing shared encounter time");
+                } else {
+                    let mut params = params.clone();
+                    params.update(own_tek, next_shared_encounter_times);
+                    let client =
+                        Self::get_forwarder_client(matched.connection_identifier()).await?;
+                    client
+                        .forward(context::current(), params)
+                        .await
+                        .context("Error while forwarding tek to next successor")?;
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -294,7 +373,10 @@ impl Computation {
     pub fn is_own(&self) -> bool {
         self.successors.is_empty()
     }
-    pub fn successors(&mut self) -> &mut HashSet<Match> {
+    pub fn successors(&self) -> &HashSet<Match> {
+        &self.successors
+    }
+    pub fn successors_mut(&mut self) -> &mut HashSet<Match> {
         &mut self.successors
     }
     pub fn redlist(&self) -> &HashSet<Validity<TemporaryExposureKey>> {
