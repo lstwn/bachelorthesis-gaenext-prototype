@@ -17,7 +17,7 @@ impl Args {
     const LOG_LEVEL: &'static str = "verbosity";
     const LOG_LEVEL_DEFAULT: &'static str = "vvvv";
     const LOG_REFRESH_RATE: &'static str = "LOG_REFRESH_RATE";
-    const LOG_REFRESH_RATE_DEFAULT: &'static str = "1000";
+    const LOG_REFRESH_RATE_DEFAULT: &'static str = "250";
 
     pub fn new() -> Self {
         let matches = App::new(crate_name!())
