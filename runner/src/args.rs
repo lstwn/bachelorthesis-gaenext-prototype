@@ -15,7 +15,7 @@ impl Args {
     const LOG_FILES_PATH: &'static str = "LOG_FILES_PATH";
     const LOG_FILES_PATH_DEFAULT: &'static str = "logs";
     const LOG_LEVEL: &'static str = "verbosity";
-    const LOG_LEVEL_DEFAULT: &'static str = "vvvv";
+    const LOG_LEVEL_DEFAULT: &'static str = "vv";
     const LOG_REFRESH_RATE: &'static str = "LOG_REFRESH_RATE";
     const LOG_REFRESH_RATE_DEFAULT: &'static str = "250";
 
