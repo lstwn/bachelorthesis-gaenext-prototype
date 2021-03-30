@@ -138,11 +138,14 @@ impl ClientState {
                         continue;
                     }
                 };
-                logger::debug!("Chunks: {:?}", updates);
+                match updates.len() {
+                    0 => logger::info!("No new chunks"),
+                    _ => logger::info!("New chunks: {:?}", updates),
+                }
                 let mut next_last_download = from;
                 for chunk in updates {
                     if *chunk.covers().to_excluding() > next_last_download {
-                        next_last_download = chunk.covers().to_excluding().clone();
+                        next_last_download = chunk.covers().from_including().clone();
                     }
                     Arc::clone(&self).process_chunk(chunk).await;
                 }
@@ -242,6 +245,7 @@ impl ClientState {
             ),
             None => unreachable!("There should *always* be an own TEK for a tekrp during which a foreign TEK was matched"),
         };
+        logger::info!("New TEK forwarding chain from origin");
         Arc::clone(&self.forwarder_server)
             .request(Arc::clone(&self))
             .await;
@@ -278,6 +282,7 @@ impl ClientState {
             .context("Error spawning forwarder client")
     }
     pub async fn on_tek_forward(self: Arc<Self>, params: ForwardParams) -> Result<()> {
+        logger::info!("New TEK forward request");
         let tekrp = self.system_params.tek_rolling_period;
         let predecessor_tek = params.predecessor_tek(tekrp);
         let predecessor_tek_keyring = Validity::<TekKeyring>::try_from(predecessor_tek.clone())
@@ -303,7 +308,10 @@ impl ClientState {
             }
         };
         if params.is_first_forward() {
-            computation.redlist_mut().insert(predecessor_tek);
+            match computation.redlist_mut().insert(predecessor_tek) {
+                false => logger::warn!("Trying to add TEK to redlist for the second time, possible double match of TEK?"),
+                true => logger::info!("Added new TEK to redlist"),
+            }
         }
         if !computation.redlist().contains(&predecessor_tek) {
             logger::info!("Dropping TEK forwarding due to missing entry of predecessor in the computation's redlist");
@@ -321,6 +329,7 @@ impl ClientState {
         if computation.is_own() {
             let mut diagnosis_keys = HashSet::with_capacity(1);
             diagnosis_keys.insert(params.origin_tek(tekrp));
+            logger::info!("Announcing TEK to greylist on Diagnosis Server");
             // TODO: retry strategy
             self.diagnosis_server_client
                 .greylist_upload(
@@ -350,8 +359,9 @@ impl ClientState {
                 } else {
                     let mut params = params.clone();
                     params.update(own_tek, next_shared_encounter_times);
+                    logger::info!("Forwarding TEK to successor");
                     let client =
-                        Self::get_forwarder_client(matched.connection_identifier()).await?;
+                        Self::get_forwarder_client(successor.connection_identifier()).await?;
                     client
                         .forward(context::current(), params)
                         .await

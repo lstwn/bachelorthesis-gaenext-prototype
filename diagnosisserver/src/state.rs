@@ -139,10 +139,19 @@ impl Chunks {
         }
     }
     fn get_chunks(&self, from: &DateTime<Utc>) -> Vec<Chunk> {
-        self.inner
-            .iter()
-            .skip_while(|chunk| !chunk.covers().before(from))
-            .cloned()
-            .collect()
+        match self.inner.front() {
+            Some(newest) => {
+                if from >= newest.covers().from_including() {
+                    Vec::new()
+                } else {
+                    self.inner
+                        .iter()
+                        .take_while(|chunk| !chunk.covers().contains(from))
+                        .cloned()
+                        .collect()
+                }
+            }
+            None => Vec::new(),
+        }
     }
 }

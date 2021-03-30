@@ -48,6 +48,14 @@ impl Default for Config {
                 Encounter::new(Utc.ymd(2021, 3, 1).and_hms(13, 44, 0), Intensity::LowRisk),
             ]),
         );
+        social_graph.add_edge(
+            p2,
+            p1,
+            Encounters::new(vec![
+                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(15, 44, 0), Intensity::HighRisk),
+                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(13, 44, 0), Intensity::LowRisk),
+            ]),
+        );
 
         Config {
             host: String::from("127.0.0.1"),

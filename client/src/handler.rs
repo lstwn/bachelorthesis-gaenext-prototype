@@ -20,7 +20,7 @@ impl ConnectionHandler {
 #[tarpc::server]
 impl Forwarder for ConnectionHandler {
     async fn forward(self, context: Context, params: ForwardParams) -> () {
-        logger::debug!(
+        logger::trace!(
             "New forward() RPC from {:?} with context {:?} and params {:?}",
             self.peer_addr,
             context,
