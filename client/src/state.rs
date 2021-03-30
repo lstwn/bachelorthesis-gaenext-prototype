@@ -138,10 +138,7 @@ impl ClientState {
                         continue;
                     }
                 };
-                match updates.len() {
-                    0 => logger::info!("No new chunks"),
-                    _ => logger::info!("New chunks: {:?}", updates),
-                }
+                logger::debug!("New chunks: {:?}", updates);
                 let mut next_last_download = from;
                 for chunk in updates {
                     if *chunk.covers().to_excluding() > next_last_download {
