@@ -20,8 +20,8 @@ fn main() -> Result<()> {
     );
     println!("Press CTRL+C to stop diagnosis server and all clients");
     println!(
-        "All logs will appear in this terminal or \
-        alternatively per binary in the {:?} folder",
+        "All logs will appear in this terminal (not necessarily chronologically ordered!) \
+        or alternatively per binary in the {:?} folder",
         args.log_files_path
     );
     println!("-------------------------------------------");
