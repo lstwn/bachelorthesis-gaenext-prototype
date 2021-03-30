@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
 
     logger::setup_logger(&args.log_file_path, args.log_level, String::from("ds"));
 
-    let state = DiagnosisServerState::new(&config);
+    let state = Arc::new(DiagnosisServerState::new(&config));
 
     logger::trace!("Diagnosis Server listening on {}", config.endpoint);
 

@@ -15,25 +15,25 @@ use tokio::time;
 pub struct DiagnosisServerState {
     current_chunk: Arc<Mutex<Chunk>>,
     done_chunks: Arc<Mutex<Chunks>>,
-    computation_id_seed: Arc<Mutex<u32>>,
+    computation_id_seed: Mutex<u32>,
 }
 
 impl DiagnosisServerState {
-    pub fn new(config: &DiagnosisServerConfig) -> Arc<Self> {
+    pub fn new(config: &DiagnosisServerConfig) -> Self {
         let chunk_period = Duration::from(config.params.chunk_period);
         let retention_period = config
             .params
             .infection_period
             .as_duration(config.params.tek_rolling_period);
-        let done_chunks = Chunks::new(chunk_period, retention_period);
+        let done_chunks = Chunks::new(retention_period);
         let current_chunk = Chunk::new(TimeInterval::with_alignment(chunk_period));
         let diagnosis_server_state = Self {
             done_chunks: Arc::new(Mutex::new(done_chunks)),
             current_chunk: Arc::new(Mutex::new(current_chunk)),
-            computation_id_seed: Arc::new(Mutex::new(0)),
+            computation_id_seed: Mutex::new(0),
         };
         diagnosis_server_state.update();
-        Arc::new(diagnosis_server_state)
+        diagnosis_server_state
     }
     fn update(&self) -> () {
         let done_chunks = Arc::clone(&self.done_chunks);
@@ -110,15 +110,13 @@ impl DiagnosisServerState {
 
 #[derive(Debug)]
 struct Chunks {
-    chunk_period: Duration, // TODO: remove if really not needed
     retention_period: Duration,
     inner: VecDeque<Chunk>,
 }
 
 impl Chunks {
-    fn new(chunk_period: Duration, retention_period: Duration) -> Self {
+    fn new(retention_period: Duration) -> Self {
         Self {
-            chunk_period,
             retention_period,
             inner: VecDeque::new(),
         }
