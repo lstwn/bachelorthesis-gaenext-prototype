@@ -19,8 +19,8 @@ pub fn setup_logger<P: AsRef<Path>>(log_file_path: P, log_level: log::LevelFilte
     let stderr_config = Dispatch::new()
         .format(move |out, message, record| {
             out.finish(format_args!(
-                "[{client:<2}] {level:<5} {message} [{time}][{target}]",
-                time = chrono::Local::now().format("%H:%M:%S"),
+                "[{time}] {level:<5} |{client:<2}| {message} [{target}]",
+                time = chrono::Local::now().format("%H:%M:%S:%3f"),
                 client = name,
                 target = record.target(),
                 level = colors.color(record.level()),
