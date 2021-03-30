@@ -95,7 +95,9 @@ impl ClientState {
     }
     async fn init(self: Arc<Self>) -> Result<()> {
         if self.participant.positively_tested {
-            logger::warn!("Client is positively tested and announcing its TEKs to the blacklist");
+            logger::warn!(
+                "Participant is positively tested and announcing its TEKs to the blacklist"
+            );
             let diagnosis_keys = {
                 let keys = self.keys.lock().await;
                 keys.all_teks()
@@ -123,7 +125,7 @@ impl ClientState {
                     *last_download
                 };
                 logger::info!(
-                    "Downloading latest chunks from {:?} from Diagnosis Server",
+                    "Downloading latest chunks from {:?} from diagnosis server",
                     from
                 );
                 // TODO: proper retry strategy
@@ -134,7 +136,7 @@ impl ClientState {
                 {
                     Ok(updates) => updates,
                     Err(e) => {
-                        logger::error!("Errow while downloading DKs from Diagnosis Server: {}", e);
+                        logger::error!("Errow while downloading DKs from diagnosis server: {}", e);
                         continue;
                     }
                 };
@@ -156,7 +158,7 @@ impl ClientState {
         let filter_match = |tek| match Validity::<TekKeyring>::try_from(tek) {
             Ok(tek) => bluetooth_layer.match_with(tek),
             Err(e) => {
-                logger::warn!("Could not derive RPIK and AEMK from TEK: {}", e);
+                logger::warn!("Could not derive RPIK and AEMK from {:?}: {}", tek, e);
                 None
             }
         };
@@ -169,7 +171,7 @@ impl ClientState {
                 let keys = self.keys.lock().await;
                 if computations.contains_key(&computation_id) {
                     if let Some(_) = greylist.iter().find(|tek| keys.is_own_tek(tek)) {
-                        logger::warn!("WARNING: SSEV alert: client had a high-risk transitive contact with an infected participant.")
+                        logger::warn!("WARNING: SSEV alert: participant had a high-risk transitive contact with another infected participant.")
                     }
                 }
             };
@@ -212,22 +214,28 @@ impl ClientState {
         if from == ListType::Blacklist {
             if !matched.high_risk().is_empty() {
                 logger::warn!(
-                    "WARNING: client had a high-risk traced contact with an infected participant"
+                    "WARNING: participant had a high-risk traced contact with an infected participant"
                 ); // TODO: when? From<ExposureTime> for DateTime<Utc>
             } else {
                 logger::warn!(
-                    "WARNING: client had a low-risk traced contact with an infected participant"
+                    "WARNING: participant had a low-risk traced contact with an infected participant"
                 );
             }
         }
         if matched.high_risk().is_empty() {
-            logger::info!("Skipping TEK match due missing high risk encounter");
+            logger::info!(
+                "Skipping TEK match due missing high risk encounter of {:?}",
+                matched.tek()
+            );
             return Ok(());
         }
         let mut computations = self.computations.lock().await;
         if let Some(computation) = computations.get(&computation_id) {
             if from == ListType::Greylist && computation.redlist().contains(matched.tek()) {
-                logger::info!("Skipping TEK match due to redlist and greylist presence");
+                logger::info!(
+                    "Skipping TEK match due to redlist and greylist presence of {:?}",
+                    matched.tek()
+                );
                 return Ok(());
             }
         }
@@ -246,8 +254,9 @@ impl ClientState {
             .request(Arc::clone(&self))
             .await;
         logger::info!(
-            "New TEK forwarding chain from origin to successor at {:?}",
-            matched.connection_identifier()
+            "New forwarding chain from origin to successor at {:?} of {:?}",
+            matched.connection_identifier(),
+            own_tek,
         );
         let client = Self::get_forwarder_client(matched.connection_identifier()).await?;
         client
@@ -282,8 +291,9 @@ impl ClientState {
             .context("Error spawning forwarder client")
     }
     pub async fn on_tek_forward(self: Arc<Self>, params: ForwardParams) -> Result<()> {
-        logger::info!("New TEK forward request");
         let tekrp = self.system_params.tek_rolling_period;
+        let origin_tek = params.origin_tek(tekrp);
+        logger::info!("New forward request of {:?}", origin_tek);
         let predecessor_tek = params.predecessor_tek(tekrp);
         let predecessor_tek_keyring = Validity::<TekKeyring>::try_from(predecessor_tek.clone())
             .context("Error deriving RPIK and AEMK from TEK")?;
@@ -291,7 +301,7 @@ impl ClientState {
         let matched = match bluetooth_layer.match_with(predecessor_tek_keyring) {
             Some(matched) => matched,
             None => {
-                logger::info!("Dropping TEK forwarding due to missing match");
+                logger::info!("Dropping forwarding due to missing match of {:?}", origin_tek);
                 return Ok(());
             }
         };
@@ -301,20 +311,21 @@ impl ClientState {
             Some(computation) => computation,
             None => {
                 logger::info!(
-                    "Dropping TEK forwarding due to unknown computation {:?}",
-                    computation_id
+                    "Dropping forwarding due to unknown {:?} of {:?}",
+                    computation_id,
+                    origin_tek,
                 );
                 return Ok(());
             }
         };
         if params.is_first_forward() {
             match computation.redlist_mut().insert(predecessor_tek) {
-                false => logger::warn!("Trying to add TEK to redlist for the second time, possible double match of TEK?"),
-                true => logger::info!("Added new TEK to redlist"),
+                false => logger::warn!("Trying to add {:?} to redlist for the second time, possible double match of TEK?", origin_tek),
+                true => logger::info!("Added to redlist with {:?} new {:?}", computation_id, origin_tek),
             }
         }
         if !computation.redlist().contains(&predecessor_tek) {
-            logger::info!("Dropping TEK forwarding due to missing entry of predecessor in the computation's redlist");
+            logger::info!("Dropping {:?} forwarding due to missing entry of predecessor in the computation's redlist with {:?}", origin_tek, computation_id);
             return Ok(());
         }
         let shared_encounter_times: ExposureTimeSet = matched
@@ -323,13 +334,19 @@ impl ClientState {
             .cloned()
             .collect();
         if shared_encounter_times.is_empty() {
-            logger::info!("Dropping TEK forwarding due to a missing shared encounter time");
+            logger::info!(
+                "Dropping forwarding due to a missing shared encounter time of {:?}",
+                origin_tek
+            );
             return Ok(());
         }
         if computation.is_own() {
             let mut diagnosis_keys = HashSet::with_capacity(1);
-            diagnosis_keys.insert(params.origin_tek(tekrp));
-            logger::info!("Announcing TEK to greylist on Diagnosis Server");
+            diagnosis_keys.insert(origin_tek);
+            logger::info!(
+                "Announcing to greylist on diagnosis server {:?}",
+                origin_tek
+            );
             // TODO: retry strategy
             self.diagnosis_server_client
                 .greylist_upload(
@@ -340,7 +357,10 @@ impl ClientState {
                     },
                 )
                 .await
-                .context("Pooling node could not upload received DK to greylist")?;
+                .context(format!(
+                    "Pooling node could not upload received {:?} to greylist",
+                    origin_tek
+                ))?;
         } else {
             let valid_from = matched.tek().valid_from();
             let keys = self.keys.lock().await;
@@ -355,13 +375,14 @@ impl ClientState {
                     .cloned()
                     .collect();
                 if next_shared_encounter_times.is_empty() {
-                    logger::info!("Skipping forwarding to successor candidate due to a missing shared encounter time");
+                    logger::info!("Skipping forwarding to successor candidate at {:?} due to a missing shared encounter time", successor.connection_identifier());
                 } else {
                     let mut params = params.clone();
                     params.update(own_tek, next_shared_encounter_times);
                     logger::info!(
-                        "Forwarding TEK to successor at {:?}",
-                        successor.connection_identifier()
+                        "Forwarding to successor at {:?} {:?}",
+                        successor.connection_identifier(),
+                        origin_tek,
                     );
                     let client =
                         Self::get_forwarder_client(successor.connection_identifier()).await?;
@@ -369,7 +390,8 @@ impl ClientState {
                         .forward(context::current(), params)
                         .await
                         .context(format!(
-                            "Error while forwarding tek to next successor at {:?}",
+                            "Error while forwarding {:?} to next successor at {:?}",
+                            origin_tek,
                             successor.connection_identifier()
                         ))?;
                 }
