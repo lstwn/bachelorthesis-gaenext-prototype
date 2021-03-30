@@ -34,7 +34,7 @@ impl DiagnosisServer for ConnectionHandler {
         _context: Context,
         params: BlacklistUploadParams,
     ) -> ComputationId {
-        logger::debug!(
+        logger::trace!(
             "New blacklist_upload() RPC from {:?} with context {:?} and params {:?}",
             self.peer_addr,
             _context,
@@ -43,7 +43,7 @@ impl DiagnosisServer for ConnectionHandler {
         self.state.add_to_blacklist(&params).await
     }
     async fn greylist_upload(self, context: Context, params: GreylistUploadParams) -> () {
-        logger::debug!(
+        logger::trace!(
             "New greylist_upload() RPC from {:?} with context {:?} and params {:?}",
             self.peer_addr,
             context,
@@ -52,7 +52,7 @@ impl DiagnosisServer for ConnectionHandler {
         self.state.add_to_greylist(&params).await
     }
     async fn download(self, context: Context, params: DownloadParams) -> Vec<Chunk> {
-        logger::debug!(
+        logger::trace!(
             "New download() RPC from {:?} with context {:?} and params {:?}",
             self.peer_addr,
             context,
