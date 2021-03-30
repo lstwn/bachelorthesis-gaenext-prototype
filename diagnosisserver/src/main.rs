@@ -24,11 +24,10 @@ async fn main() -> Result<()> {
 
     let config = fs::read_to_string(&args.config_file_path)?;
     let config: DiagnosisServerConfig = serde_yaml::from_str(&config)?;
-    let config = Arc::new(config);
 
     logger::setup_logger(&args.log_file_path, args.log_level, String::from("ds"));
 
-    let state = DiagnosisServerState::new(Arc::clone(&config));
+    let state = DiagnosisServerState::new(&config);
 
     logger::trace!("Diagnosis Server listening on {}", config.endpoint);
 

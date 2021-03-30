@@ -23,12 +23,6 @@ impl ConnectionHandler {
 
 #[tarpc::server]
 impl DiagnosisServer for ConnectionHandler {
-    async fn hello(self, _context: Context, world: String) -> String {
-        format!(
-            "Hi {} at {:?} from Diagnosis Server!",
-            world, self.peer_addr
-        )
-    }
     async fn blacklist_upload(
         self,
         _context: Context,

@@ -7,7 +7,6 @@ use std::collections::HashSet;
 
 #[tarpc::service]
 pub trait DiagnosisServer {
-    async fn hello(world: String) -> String;
     async fn blacklist_upload(params: BlacklistUploadParams) -> ComputationId;
     async fn greylist_upload(params: GreylistUploadParams) -> ();
     async fn download(params: DownloadParams) -> Vec<Chunk>;

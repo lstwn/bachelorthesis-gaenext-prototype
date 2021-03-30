@@ -13,14 +13,13 @@ use tokio::task;
 use tokio::time;
 
 pub struct DiagnosisServerState {
-    config: Arc<DiagnosisServerConfig>,
     current_chunk: Arc<Mutex<Chunk>>,
     done_chunks: Arc<Mutex<Chunks>>,
     computation_id_seed: Arc<Mutex<u32>>,
 }
 
 impl DiagnosisServerState {
-    pub fn new(config: Arc<DiagnosisServerConfig>) -> Arc<Self> {
+    pub fn new(config: &DiagnosisServerConfig) -> Arc<Self> {
         let chunk_period = Duration::from(config.params.chunk_period);
         let retention_period = config
             .params
@@ -29,7 +28,6 @@ impl DiagnosisServerState {
         let done_chunks = Chunks::new(chunk_period, retention_period);
         let current_chunk = Chunk::new(TimeInterval::with_alignment(chunk_period));
         let diagnosis_server_state = Self {
-            config,
             done_chunks: Arc::new(Mutex::new(done_chunks)),
             current_chunk: Arc::new(Mutex::new(current_chunk)),
             computation_id_seed: Arc::new(Mutex::new(0)),
