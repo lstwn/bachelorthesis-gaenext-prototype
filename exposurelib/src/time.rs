@@ -3,9 +3,10 @@ use chrono::prelude::*;
 use chrono::Duration;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
+use std::fmt;
 use std::ops::{Add, Sub};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ExposureTime {
     en_interval_number: u32,
 }
@@ -97,6 +98,12 @@ impl Sub<TekRollingPeriod> for ExposureTime {
         Self {
             en_interval_number: self.en_interval_number - u32::from(other),
         }
+    }
+}
+
+impl fmt::Debug for ExposureTime {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ENIntervalNumber({})", self.en_interval_number)
     }
 }
 

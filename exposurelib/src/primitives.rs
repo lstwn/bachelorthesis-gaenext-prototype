@@ -11,6 +11,7 @@ pub use ring::rand::SystemRandom;
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 use std::net::SocketAddr;
+use std::fmt;
 
 #[derive(Serialize, Deserialize)]
 pub struct KeyForward {
@@ -27,7 +28,7 @@ pub struct KeyUpload {
     // NOTE: omitting EPK in the prototype
 }
 
-#[derive(Serialize, Deserialize, Default, Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Default, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ComputationId {
     id: u32,
 }
@@ -35,6 +36,12 @@ pub struct ComputationId {
 impl From<u32> for ComputationId {
     fn from(int: u32) -> Self {
         ComputationId { id: int }
+    }
+}
+
+impl fmt::Debug for ComputationId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ComputationId({})", self.id)
     }
 }
 
@@ -277,7 +284,7 @@ where
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TemporaryExposureKey {
     key: [u8; Self::KEY_LEN],
 }
@@ -311,6 +318,16 @@ impl From<ExposureKeyring> for TemporaryExposureKey {
 impl From<TekKeyring> for TemporaryExposureKey {
     fn from(tek_keyring: TekKeyring) -> Self {
         tek_keyring.tek
+    }
+}
+
+impl fmt::Debug for TemporaryExposureKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "TEK(")?;
+        for byte in self.key.iter().take(self.key.len() - 1) {
+            write!(f, "{:02X} ", byte)?;
+        }
+        write!(f, "{:02X})", self.key.last().unwrap())
     }
 }
 
