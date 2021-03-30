@@ -98,6 +98,9 @@ impl ForwarderServer {
                 .await
                 .context("Error creating TCP Bincode listener")?;
         listener.config_mut().max_frame_length(usize::MAX);
+
+        logger::info!("Starting to listen for forwardable TEKs at {:?} for at least {:?}", self.address, self.timeout);
+
         listener
             // ignore accept errors
             .filter_map(|r| future::ready(r.ok()))

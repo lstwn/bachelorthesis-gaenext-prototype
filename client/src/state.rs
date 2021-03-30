@@ -242,10 +242,13 @@ impl ClientState {
             ),
             None => unreachable!("There should *always* be an own TEK for a tekrp during which a foreign TEK was matched"),
         };
-        logger::info!("New TEK forwarding chain from origin");
         Arc::clone(&self.forwarder_server)
             .request(Arc::clone(&self))
             .await;
+        logger::info!(
+            "New TEK forwarding chain from origin to successor at {:?}",
+            matched.connection_identifier()
+        );
         let client = Self::get_forwarder_client(matched.connection_identifier()).await?;
         client
             .forward(
@@ -356,13 +359,19 @@ impl ClientState {
                 } else {
                     let mut params = params.clone();
                     params.update(own_tek, next_shared_encounter_times);
-                    logger::info!("Forwarding TEK to successor");
+                    logger::info!(
+                        "Forwarding TEK to successor at {:?}",
+                        successor.connection_identifier()
+                    );
                     let client =
                         Self::get_forwarder_client(successor.connection_identifier()).await?;
                     client
                         .forward(context::current(), params)
                         .await
-                        .context("Error while forwarding tek to next successor")?;
+                        .context(format!(
+                            "Error while forwarding tek to next successor at {:?}",
+                            successor.connection_identifier()
+                        ))?;
                 }
             }
         }
