@@ -10,8 +10,8 @@ use ring::rand::SecureRandom;
 pub use ring::rand::SystemRandom;
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
-use std::net::SocketAddr;
 use std::fmt;
+use std::net::SocketAddr;
 
 #[derive(Serialize, Deserialize)]
 pub struct KeyForward {
@@ -45,7 +45,7 @@ impl fmt::Debug for ComputationId {
     }
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Validity<Keyring> {
     valid_from: ExposureTime,
     keyring: Keyring,
@@ -111,6 +111,15 @@ impl From<Validity<TekKeyring>> for Validity<TemporaryExposureKey> {
 impl PartialEq<Validity<TemporaryExposureKey>> for Validity<ExposureKeyring> {
     fn eq(&self, other: &Validity<TemporaryExposureKey>) -> bool {
         self.valid_from == other.valid_from && self.keyring().tek_keyring().tek == *other.keyring()
+    }
+}
+
+impl<Keyring: fmt::Debug> fmt::Debug for Validity<Keyring> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("")
+            .field(&self.valid_from)
+            .field(&self.keyring)
+            .finish()
     }
 }
 
