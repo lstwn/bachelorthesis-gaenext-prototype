@@ -131,6 +131,10 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
 
     let mut client_config_output_path = args.config_output_path.clone();
     client_config_output_path.push("clients");
+    fs::remove_dir_all(&client_config_output_path).context(format!(
+        "Error cleaning client config output path {:?}",
+        client_config_output_path
+    ))?;
     fs::create_dir_all(&client_config_output_path).context(format!(
         "Error ensuring client config output path exists {:?}",
         client_config_output_path

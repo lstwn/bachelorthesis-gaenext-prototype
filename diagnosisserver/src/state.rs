@@ -89,6 +89,7 @@ impl DiagnosisServerState {
                 computation_id,
                 deduplicated
             );
+            // deduplication for current chunk not necessary due to set usage
             current_chunk.insert(ListType::Blacklist, computation_id, deduplicated);
         }
         computation_id
@@ -113,6 +114,7 @@ impl DiagnosisServerState {
                 computation_id,
                 deduplicated
             );
+            // deduplication for current chunk not necessary due to set usage
             current_chunk.insert(ListType::Greylist, computation_id, deduplicated);
         }
     }
