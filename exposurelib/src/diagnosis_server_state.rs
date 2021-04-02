@@ -32,7 +32,7 @@ impl Chunk {
         &mut self,
         list: ListType,
         computation_id: ComputationId,
-        data: &HashSet<Validity<TemporaryExposureKey>>,
+        data: HashSet<&Validity<TemporaryExposureKey>>,
     ) -> () {
         let computation = self
             .data
@@ -42,6 +42,9 @@ impl Chunk {
     }
     pub fn covers(&self) -> &TimeInterval {
         &self.covers
+    }
+    pub fn data(&self) -> &HashMap<ComputationId, ComputationState> {
+        &self.data
     }
     pub fn to_data(self) -> HashMap<ComputationId, ComputationState> {
         self.data
@@ -61,7 +64,7 @@ impl ComputationState {
             greylist: HashSet::new(),
         }
     }
-    pub fn insert(&mut self, list: ListType, data: &HashSet<Validity<TemporaryExposureKey>>) -> () {
+    pub fn insert(&mut self, list: ListType, data: HashSet<&Validity<TemporaryExposureKey>>) -> () {
         match list {
             ListType::Blacklist => {
                 self.blacklist.extend(data);

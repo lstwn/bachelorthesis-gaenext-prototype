@@ -1,12 +1,16 @@
 use chrono::prelude::*;
 use chrono::Duration;
-use exposurelib::config::DiagnosisServerConfig;
 use exposurelib::diagnosis_server_state::{Chunk, ListType};
 use exposurelib::logger;
 use exposurelib::primitives::ComputationId;
 use exposurelib::rpcs::{BlacklistUploadParams, DownloadParams, GreylistUploadParams};
 use exposurelib::time::TimeInterval;
-use std::collections::VecDeque;
+use exposurelib::{
+    config::DiagnosisServerConfig,
+    primitives::{TemporaryExposureKey, Validity},
+};
+use std::collections::{HashSet, VecDeque};
+use std::iter::IntoIterator;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task;
@@ -64,33 +68,55 @@ impl DiagnosisServerState {
             }
         });
     }
-    pub async fn add_to_blacklist(&self, data: &BlacklistUploadParams) -> ComputationId {
-        // TODO: already added earlier? duplicate check!
+    pub async fn add_to_blacklist(&self, data: BlacklistUploadParams) -> ComputationId {
         let mut current_chunk = self.current_chunk.lock().await;
         let computation_id = self.next_computation_id().await;
-        logger::info!(
-            "Adding to blacklist with {:?} the following DKs: {:?}",
-            computation_id,
-            data.diagnosis_keys,
-        );
-        current_chunk.insert(ListType::Blacklist, computation_id, &data.diagnosis_keys);
+        // deduplication not strictly necessary here but let's make it more robust..
+        let done_chunks = self.done_chunks.lock().await;
+        let diagnosis_keys_refs = &data.diagnosis_keys.iter().collect();
+        let (deduplicated, duplicates) =
+            done_chunks.deduplicate(ListType::Blacklist, computation_id, &diagnosis_keys_refs);
+        if !duplicates.is_empty() {
+            logger::info!(
+                "Not adding to blacklist with {:?} the following duplicate DKs: {:?}",
+                computation_id,
+                duplicates
+            );
+        }
+        if !deduplicated.is_empty() {
+            logger::info!(
+                "Adding to blacklist with {:?} the following DKs: {:?}",
+                computation_id,
+                deduplicated
+            );
+            current_chunk.insert(ListType::Blacklist, computation_id, deduplicated);
+        }
         computation_id
     }
-    pub async fn add_to_greylist(&self, data: &GreylistUploadParams) -> () {
-        // TODO: already added earlier? duplicate check!
+    pub async fn add_to_greylist(&self, data: GreylistUploadParams) -> () {
         let mut current_chunk = self.current_chunk.lock().await;
-        logger::info!(
-            "Adding to greylist with {:?} the following DKs: {:?}",
-            data.computation_id,
-            data.diagnosis_keys,
-        );
-        current_chunk.insert(
-            ListType::Greylist,
-            data.computation_id,
-            &data.diagnosis_keys,
-        );
+        let computation_id = data.computation_id;
+        let done_chunks = self.done_chunks.lock().await;
+        let diagnosis_keys_refs = &data.diagnosis_keys.iter().collect();
+        let (deduplicated, duplicates) =
+            done_chunks.deduplicate(ListType::Greylist, computation_id, &diagnosis_keys_refs);
+        if !duplicates.is_empty() {
+            logger::info!(
+                "Not adding to greylist with {:?} the following duplicate DKs: {:?}",
+                computation_id,
+                duplicates
+            );
+        }
+        if !deduplicated.is_empty() {
+            logger::info!(
+                "Adding to greylist with {:?} the following DKs: {:?}",
+                computation_id,
+                deduplicated
+            );
+            current_chunk.insert(ListType::Greylist, computation_id, deduplicated);
+        }
     }
-    pub async fn request_chunks(&self, data: &DownloadParams) -> Vec<Chunk> {
+    pub async fn request_chunks(&self, data: DownloadParams) -> Vec<Chunk> {
         let done_chunks = self.done_chunks.lock().await;
         logger::debug!("Client requests chunks from {}", data.from);
         done_chunks.get_chunks(&data.from)
@@ -149,5 +175,48 @@ impl Chunks {
             }
             None => Vec::new(),
         }
+    }
+    fn deduplicate<'a>(
+        &'a self,
+        list: ListType,
+        computation_id: ComputationId,
+        candidates: &'a HashSet<&'a Validity<TemporaryExposureKey>>,
+    ) -> (
+        HashSet<&'a Validity<TemporaryExposureKey>>,
+        HashSet<&'a Validity<TemporaryExposureKey>>,
+    ) {
+        let mut deduplicated: HashSet<&Validity<TemporaryExposureKey>> = candidates.clone();
+        for chunk in self.into_iter() {
+            match chunk.data().get(&computation_id) {
+                Some(computation_state) => {
+                    let list: HashSet<&Validity<TemporaryExposureKey>> = match list {
+                        ListType::Blacklist => computation_state.blacklist().iter().collect(),
+                        ListType::Greylist => computation_state.greylist().iter().collect(),
+                    };
+                    deduplicated = deduplicated
+                        .difference(&list)
+                        .into_iter()
+                        .map(|x| *x)
+                        .collect();
+                }
+                None => continue,
+            }
+        }
+        let duplicates: HashSet<&Validity<TemporaryExposureKey>> = candidates
+            .difference(&deduplicated)
+            .into_iter()
+            .map(|x| *x)
+            .collect();
+        (deduplicated, duplicates)
+    }
+}
+
+// let's make Chunks iterable because why not
+impl<'a> IntoIterator for &'a Chunks {
+    type Item = &'a Chunk;
+    type IntoIter = std::collections::vec_deque::Iter<'a, Chunk>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.iter()
     }
 }

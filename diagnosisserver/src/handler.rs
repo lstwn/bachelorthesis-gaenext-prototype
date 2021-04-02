@@ -34,7 +34,7 @@ impl DiagnosisServer for ConnectionHandler {
             _context,
             params
         );
-        self.state.add_to_blacklist(&params).await
+        self.state.add_to_blacklist(params).await
     }
     async fn greylist_upload(self, context: Context, params: GreylistUploadParams) -> () {
         logger::trace!(
@@ -43,7 +43,7 @@ impl DiagnosisServer for ConnectionHandler {
             context,
             params
         );
-        self.state.add_to_greylist(&params).await
+        self.state.add_to_greylist(params).await
     }
     async fn download(self, context: Context, params: DownloadParams) -> Vec<Chunk> {
         logger::trace!(
@@ -52,6 +52,6 @@ impl DiagnosisServer for ConnectionHandler {
             context,
             params
         );
-        self.state.request_chunks(&params).await
+        self.state.request_chunks(params).await
     }
 }
