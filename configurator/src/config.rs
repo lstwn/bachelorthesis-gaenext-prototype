@@ -23,13 +23,15 @@ impl Default for Config {
         let p0 = social_graph.add_node(Participant::new("p0", true));
         let p1 = social_graph.add_node(Participant::new("p1", false));
         let p2 = social_graph.add_node(Participant::new("p2", false));
+        let p3 = social_graph.add_node(Participant::new("p3", false));
 
+        // an edge from p0 to p1 means that p0 registered p1 
+        // at the given time with the given risk
         social_graph.add_edge(
             p0,
             p1,
             Encounters::new(vec![
                 Encounter::new(Utc.ymd(2021, 3, 1).and_hms(15, 44, 0), Intensity::HighRisk),
-                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(14, 44, 0), Intensity::LowRisk),
             ]),
         );
         social_graph.add_edge(
@@ -37,7 +39,6 @@ impl Default for Config {
             p0,
             Encounters::new(vec![
                 Encounter::new(Utc.ymd(2021, 3, 1).and_hms(15, 44, 0), Intensity::HighRisk),
-                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(14, 44, 0), Intensity::LowRisk),
             ]),
         );
         social_graph.add_edge(
@@ -53,7 +54,21 @@ impl Default for Config {
             p1,
             Encounters::new(vec![
                 Encounter::new(Utc.ymd(2021, 3, 1).and_hms(15, 44, 0), Intensity::HighRisk),
-                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(13, 44, 0), Intensity::LowRisk),
+                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(13, 44, 0), Intensity::HighRisk),
+            ]),
+        );
+        social_graph.add_edge(
+            p2,
+            p3,
+            Encounters::new(vec![
+                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(13, 44, 0), Intensity::HighRisk),
+            ]),
+        );
+        social_graph.add_edge(
+            p3,
+            p2,
+            Encounters::new(vec![
+                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(13, 44, 0), Intensity::HighRisk),
             ]),
         );
 

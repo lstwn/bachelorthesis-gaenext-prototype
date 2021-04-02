@@ -87,7 +87,7 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
             let edge_index = graph.find_edge(node_index, other_node_index).unwrap();
             let encounters = graph.edge_weight(edge_index).unwrap();
             for encounter in encounters.encounters.iter() {
-                let (keys, _, endpoint) = client_init.get(&participant).unwrap();
+                let (keys, _, endpoint) = client_init.get(&other_participant).unwrap();
                 let metadata = Metadata::new(encounter.intensity, endpoint.clone());
                 let (rpi, aem) = keys
                     .exposure_keyring(encounter.time.into(), tekrp)
@@ -104,7 +104,7 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
                     .tek_keyring()
                     .rpi_and_aem(encounter.time.into(), metadata);
                 let traced_contact = TracedContact::new(encounter.time, rpi, aem);
-                let (_, bluetooth_layer, _) = client_init.get_mut(&other_participant).unwrap();
+                let (_, bluetooth_layer, _) = client_init.get_mut(&participant).unwrap();
                 bluetooth_layer.add(traced_contact, tekrp)
             }
         }
