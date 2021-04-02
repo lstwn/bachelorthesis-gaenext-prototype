@@ -10,21 +10,29 @@ use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::Duration;
 
+const DIVIDER: &'static str = "-------------------------------------------";
+
 fn main() -> Result<()> {
     let args = Args::new();
+    println!("Building the project in release mode\n{}", DIVIDER);
+    let exit_status = build_project().context("Error spawning build process")?;
+    if !exit_status.success() {
+        println!("{}\nError building the project in release mode, aborting", DIVIDER);
+        std::process::exit(exit_status.code().unwrap_or(1));
+    }
     println!(
-        "Assuming you have build the project in release mode, \
-        run the configurator beforehand and that the generated \
-        configurations are present in {:?}",
+        "{}\nAssuming you have run the configurator beforehand and that the generated \
+        (and up-to-date) configurations are present in {:?}",
+        DIVIDER,
         args.config_files_path
     );
     println!("Press CTRL+C to stop diagnosis server and all clients");
     println!(
         "All logs will appear in this terminal (not necessarily chronologically ordered!) \
-        or alternatively per binary in the {:?} folder",
-        args.log_files_path
+        or alternatively per binary in the {:?} folder\n{}",
+        args.log_files_path,
+        DIVIDER
     );
-    println!("-------------------------------------------");
     fs::create_dir_all(&args.log_files_path)?;
 
     let (output_tx, output_rx) = unbounded::<String>();
@@ -49,9 +57,9 @@ fn main() -> Result<()> {
             match signal {
                 SIGINT => {
                     println!(
-                        "-----------------------------------------\n\
-                        Received SIGINT signal ({}), \
+                        "{}\nReceived SIGINT signal ({}), \
                         shutting down clients and diagnosis server..",
+                        DIVIDER,
                         signal
                     );
                     termination_request_tx.send(()).unwrap();
@@ -163,4 +171,11 @@ fn monitor_subprocess(
         println!("Killed subprocess '{}' with ID '{}'", name, child.id());
         channels.termination_done_tx.send(()).unwrap();
     });
+}
+
+fn build_project() -> Result<std::process::ExitStatus> {
+    Ok(Command::new("cargo")
+        .arg("build")
+        .arg("--release")
+        .status()?)
 }
