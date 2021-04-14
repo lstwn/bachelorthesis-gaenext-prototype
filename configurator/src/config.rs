@@ -1,8 +1,8 @@
 use chrono::prelude::*;
+use exposurelib::config::{Encounter, Encounters, Intensity, Participant, SystemParams};
 use petgraph::graph::Graph;
 use serde::{Deserialize, Serialize};
 use std::default::Default;
-use exposurelib::config::{Encounter, Encounters, Intensity, Participant, SystemParams};
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
@@ -26,21 +26,23 @@ impl Default for Config {
         let p3 = social_graph.add_node(Participant::new("p3", false));
         let p4 = social_graph.add_node(Participant::new("p4", false));
 
-        // an edge from p0 to p1 means that p0 registered p1 
+        // an edge from p0 to p1 means that p0 registered p1
         // at the given time with the given risk
         social_graph.add_edge(
             p0,
             p1,
-            Encounters::new(vec![
-                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(15, 44, 0), Intensity::HighRisk),
-            ]),
+            Encounters::new(vec![Encounter::new(
+                Utc.ymd(2021, 3, 1).and_hms(15, 44, 0),
+                Intensity::HighRisk,
+            )]),
         );
         social_graph.add_edge(
             p1,
             p0,
-            Encounters::new(vec![
-                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(15, 44, 0), Intensity::HighRisk),
-            ]),
+            Encounters::new(vec![Encounter::new(
+                Utc.ymd(2021, 3, 1).and_hms(15, 44, 0),
+                Intensity::HighRisk,
+            )]),
         );
         social_graph.add_edge(
             p1,
@@ -61,44 +63,50 @@ impl Default for Config {
         social_graph.add_edge(
             p2,
             p3,
-            Encounters::new(vec![
-                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(13, 44, 0), Intensity::HighRisk),
-            ]),
+            Encounters::new(vec![Encounter::new(
+                Utc.ymd(2021, 3, 1).and_hms(13, 44, 0),
+                Intensity::HighRisk,
+            )]),
         );
         social_graph.add_edge(
             p3,
             p2,
-            Encounters::new(vec![
-                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(13, 44, 0), Intensity::HighRisk),
-            ]),
+            Encounters::new(vec![Encounter::new(
+                Utc.ymd(2021, 3, 1).and_hms(13, 44, 0),
+                Intensity::HighRisk,
+            )]),
         );
         social_graph.add_edge(
             p2,
             p4,
-            Encounters::new(vec![
-                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(13, 44, 0), Intensity::HighRisk),
-            ]),
+            Encounters::new(vec![Encounter::new(
+                Utc.ymd(2021, 3, 1).and_hms(13, 44, 0),
+                Intensity::HighRisk,
+            )]),
         );
         social_graph.add_edge(
             p4,
             p2,
-            Encounters::new(vec![
-                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(13, 44, 0), Intensity::HighRisk),
-            ]),
+            Encounters::new(vec![Encounter::new(
+                Utc.ymd(2021, 3, 1).and_hms(13, 44, 0),
+                Intensity::HighRisk,
+            )]),
         );
         social_graph.add_edge(
             p0,
             p4,
-            Encounters::new(vec![
-                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(13, 44, 0), Intensity::HighRisk),
-            ]),
+            Encounters::new(vec![Encounter::new(
+                Utc.ymd(2021, 3, 1).and_hms(13, 44, 0),
+                Intensity::HighRisk,
+            )]),
         );
         social_graph.add_edge(
             p4,
             p0,
-            Encounters::new(vec![
-                Encounter::new(Utc.ymd(2021, 3, 1).and_hms(13, 44, 0), Intensity::HighRisk),
-            ]),
+            Encounters::new(vec![Encounter::new(
+                Utc.ymd(2021, 3, 1).and_hms(13, 44, 0),
+                Intensity::HighRisk,
+            )]),
         );
 
         Config {
