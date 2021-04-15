@@ -1,5 +1,6 @@
 # Prototype for Thesis "Secure and Private Multi-Party Event Detection" @ TUM
 
+| Role       | Name                     |
 |------------|--------------------------|
 | Author     | Leo Stewen               |
 | Advisor    | Mark Gall                |
