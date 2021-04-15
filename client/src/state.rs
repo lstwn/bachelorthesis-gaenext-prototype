@@ -154,7 +154,7 @@ impl ClientState {
         computation_id: ComputationId,
     ) -> Result<()> {
         let tek_keyring = Validity::<TekKeyring>::try_from(tek)
-            .context(format!("Error deriving RPIK and AEK from {:?}", tek))?;
+            .context(format!("Error deriving RPIK and AEMK from {:?}", tek))?;
         let matched = match self.bluetooth_layer.match_with(tek_keyring) {
             Some(matched) => matched,
             None => return Ok(()),
@@ -233,7 +233,7 @@ impl ClientState {
         let predecessor_tek = params.predecessor_tek(tekrp);
         let predecessor_tek_keyring = Validity::<TekKeyring>::try_from(predecessor_tek.clone())
             .context(format!(
-                "Error deriving RPIK and AEK from {:?}",
+                "Error deriving RPIK and AEMK from {:?}",
                 predecessor_tek
             ))?;
         let matched = match self.bluetooth_layer.match_with(predecessor_tek_keyring) {
