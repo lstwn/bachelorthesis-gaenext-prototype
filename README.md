@@ -38,7 +38,7 @@ cargo run --release --bin runner
 All binaries come with a cli interface.
 Check `cargo run --release --bin <binary> -- --help` for cli argument help.
 
-For playing around with different setups, i.e. graphs, I recommend to
+For playing around with different setups, i.e., graphs, I recommend to
 run `cargo run --release --bin configurator -- emit-default-config`
 and then modify the config in `configs/configurator.yaml`.
 Alternatively, open `configurator/src/config.rs` and modify the default
@@ -69,7 +69,7 @@ configs
 │  ├── p2.yaml
 │  ├── p3.yaml
 │  └── p4.yaml
-├── configurator.dot
+├── configurator.dot      // bonus: the configurator generates a dot graph of the config
 ├── configurator.yaml
 └── diagnosisserver.yaml
 ```
@@ -85,3 +85,36 @@ logs
 └── p4.log
 ```
 
+## Tips for Creating New Configurations
+
+The configuration has a key `today`.
+When specifying the encounters of the participants in the global contact graph,
+the user has to make sure that they fall into the interval
+[today - (tekrp * infection period); today + tekrp[.
+However, an error in this regard should be caught by the configurator but
+hasn't been tested.
+Please note that the chunk interval times on the diagnosis server are determined
+by the time the program runs and are not related to the times in the configuration.
+
+## Verification
+
+The configurator has an additional verification feature, i.e., it performs
+a graph search according to chapter 2.1 of the thesis on the base of the
+specified configuration.
+The results of this graph search encompass the participants that are due to
+receive a warning.
+They are printed on your terminal and additionally passed on to the generated
+client configurations.
+After an expiration of the computation period it is automatically evaluated
+if the prototype did catch the right set of participants for the given
+configuration.
+Just watch the logs after the computation period elapsed and enjoy your
+coffee in the meantime :)
+
+### Disclaimer
+
+While this is a nice feature for easier evaluation, the user has to make sure
+that the computation period is sufficiently long for the given configuration.
+Otherwise, you run into the issues mentioned in chapter 4.2.
+Moreover, this is just a convenience feature and comes with zero guarantee
+about its correctness in all edge cases ;)
