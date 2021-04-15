@@ -31,10 +31,7 @@ impl Listener {
     }
     pub async fn run(mut self) -> ! {
         loop {
-            let duration = match self.requests.recv().await {
-                Some(duration) => duration,
-                None => panic!("Listener's send end closed"),
-            };
+            let duration = self.requests.recv().await.unwrap();
             let address = self.address;
             let client_state = self.client_state.clone();
             let listener_result = tokio::select! {
