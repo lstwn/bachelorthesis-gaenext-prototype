@@ -60,6 +60,7 @@ impl Listener {
                 }
                 None => {
                     logger::info!("Stopping to listen for forwardable TEKs");
+                    self.client_state.send(Event::ComputationPeriodExpired).await.unwrap();
                     break;
                 }
             }

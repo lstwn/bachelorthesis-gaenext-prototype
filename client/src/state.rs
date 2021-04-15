@@ -32,6 +32,7 @@ pub enum Event {
         params: ForwardParams,
         resp: oneshot::Sender<Result<()>>,
     },
+    ComputationPeriodExpired,
 }
 
 pub struct ClientState {
@@ -43,6 +44,8 @@ pub struct ClientState {
     requests: mpsc::Receiver<Event>,
     listener: mpsc::Sender<Duration>,
     diagnosis_server: Arc<rpcs::DiagnosisServerClient>,
+    traced_contact: bool,
+    transitive_contact: bool,
 }
 
 impl ClientState {
@@ -61,10 +64,12 @@ impl ClientState {
             requests,
             listener,
             diagnosis_server,
+            traced_contact: false,
+            transitive_contact: false,
         }
     }
     pub async fn run(mut self) -> ! {
-        self.init().await.unwrap(); // error handling missing
+        self.init().await.unwrap(); // insert favorite retry strategy here
         loop {
             let event = match self.requests.recv().await {
                 Some(event) => event,
@@ -88,11 +93,36 @@ impl ClientState {
                 Event::NewForwardRequest { params, resp } => {
                     resp.send(self.on_tek_forward(params).await).unwrap();
                 }
+                Event::ComputationPeriodExpired => {
+                    if self.participant.to_be_warned() {
+                        if self.traced_contact
+                            || self.transitive_contact
+                            || self.participant.positively_tested()
+                        {
+                            logger::info!("Computation detected SSEV participant which is correct! :)")
+                        } else {
+                            logger::error!("Computation detected SSEV participant which is incorrect! :(");
+                        }
+                    } else {
+                        if self.traced_contact
+                            || self.transitive_contact
+                            || self.participant.positively_tested()
+                        {
+                            logger::error!(
+                                "Computation did not detect SSEV participant which is incorrect! :("
+                            )
+                        } else {
+                            logger::info!(
+                                "Computation did not detect SSEV participant which is correct! :)"
+                            )
+                        }
+                    }
+                }
             }
         }
     }
     async fn init(&mut self) -> Result<()> {
-        if self.participant.positively_tested {
+        if self.participant.positively_tested() {
             logger::warn!(
                 "Participant is positively tested and announcing its TEKs to the blacklist"
             );
@@ -101,7 +131,7 @@ impl ClientState {
                 .send(Duration::from(self.system_params.computation_period))
                 .await
                 .unwrap();
-            let computation_id = self // retry strategy missing
+            let computation_id = self // insert favorite retry strategy here
                 .diagnosis_server
                 .blacklist_upload(context::current(), BlacklistUploadParams { diagnosis_keys })
                 .await?;
@@ -126,7 +156,18 @@ impl ClientState {
             let (blacklist, greylist) = computation_state.to_data();
             if self.computations.contains_key(&computation_id) {
                 if let Some(_) = greylist.iter().find(|tek| self.keys.is_own_tek(tek)) {
-                    logger::warn!("WARNING: SSEV alert: participant had a high-risk transitive contact with another infected participant.")
+                    if !self.traced_contact {
+                        logger::warn!(
+                            "WARNING: SSEV alert: participant had a high-risk \
+                            transitive contact with another infected participant."
+                        );
+                    } else {
+                        logger::info!(
+                            "Participant is already a traced contact \
+                            and therefore her transitive contact warning is omitted"
+                        );
+                    }
+                    self.transitive_contact = true;
                 }
             }
             for tek in blacklist.into_iter() {
@@ -169,6 +210,7 @@ impl ClientState {
                     "WARNING: participant had a low-risk traced contact with an infected participant"
                 );
             }
+            self.traced_contact = true;
         }
         if matched.high_risk().is_empty() {
             logger::info!(
@@ -287,7 +329,7 @@ impl ClientState {
                 "Announcing to greylist on diagnosis server {:?}",
                 origin_tek
             );
-            self.diagnosis_server // retry strategy missing
+            self.diagnosis_server // insert favorite retry strategy here
                 .greylist_upload(
                     context::current(),
                     GreylistUploadParams {

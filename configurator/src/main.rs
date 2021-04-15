@@ -1,6 +1,7 @@
 mod args;
 mod config;
 mod error;
+mod verification;
 use crate::error::InvalidConfigError;
 use anyhow::{Context, Result};
 use args::{Args, EmitDefaultConfigArgs, GenerateConfigsArgs};
@@ -17,6 +18,8 @@ use std::fs;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 
+const DIVIDER: &'static str = "-------------------------------------------";
+
 fn main() -> Result<()> {
     let args = Args::new();
 
@@ -31,7 +34,7 @@ fn handle_emit_default_config(args: EmitDefaultConfigArgs) -> Result<()> {
     let config = serde_yaml::to_string(&config).unwrap();
     if let Some(parent) = args.config_file_path.parent() {
         fs::create_dir_all(parent).context(format!(
-            "Could not ensure parent folders {:?} are existing.",
+            "Could not ensure parent folder {:?} is existing.",
             parent
         ))?;
     };
@@ -39,6 +42,7 @@ fn handle_emit_default_config(args: EmitDefaultConfigArgs) -> Result<()> {
         "Could not write config to {:?}.",
         args.config_file_path
     ))?;
+    println!("Emitted default config to {:?}", args.config_file_path);
     Ok(())
 }
 
@@ -51,7 +55,10 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
         "Could not deserialize config from {:?}. Check config file.",
         args.config_file_path
     ))?;
-    let graph = &config.social_graph;
+    let mut graph = config.social_graph;
+    let system_params = config.system_params;
+
+    verification::mark_ssev_group(&mut graph);
 
     let secure_random = SystemRandom::new();
 
@@ -63,7 +70,7 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
     let host: IpAddr = config.host.parse()?;
     let mut port: u16 = config.base_port;
 
-    for (_, participant) in graph.node_references() {
+    for (_node_index, participant) in graph.node_references() {
         client_init.insert(
             participant,
             (
@@ -123,7 +130,7 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
                 participant,
                 client_endpoint,
                 diagnosis_server_endpoint,
-                config.system_params,
+                system_params,
                 state,
             )
         })
@@ -179,6 +186,10 @@ fn handle_generate_configs(args: GenerateConfigsArgs) -> Result<()> {
     )
     .context("Error writing dot graph file")?;
 
+    println!(
+        "{}\nGenerated configs and dot graph in {:?}",
+        DIVIDER, args.config_output_path
+    );
     Ok(())
 }
 

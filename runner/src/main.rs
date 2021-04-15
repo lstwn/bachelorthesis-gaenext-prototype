@@ -25,7 +25,7 @@ fn main() -> Result<()> {
     }
     println!(
         "{}\nAssuming you have run the configurator beforehand and that the generated \
-        (and up-to-date) configurations are present in {:?}",
+        (and up-to-date) configurations are present in the {:?} folder",
         DIVIDER, args.config_files_path
     );
     println!("Press CTRL+C to stop diagnosis server and all clients");
