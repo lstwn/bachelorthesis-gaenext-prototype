@@ -11,6 +11,7 @@ use exposurelib::{
     client_state::{BluetoothLayer, Keys, Match},
     diagnosis_server_state::ListType,
 };
+use std::sync::Arc;
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
@@ -41,29 +42,17 @@ pub struct ClientState {
     computations: HashMap<ComputationId, Computation>,
     requests: mpsc::Receiver<Event>,
     listener: mpsc::Sender<Duration>,
-    diagnosis_server_client: rpcs::DiagnosisServerClient,
+    diagnosis_server: Arc<rpcs::DiagnosisServerClient>,
 }
 
 impl ClientState {
-    pub async fn new(
+    pub fn new(
         config: ClientConfig,
+        diagnosis_server: Arc<rpcs::DiagnosisServerClient>,
         requests: mpsc::Receiver<Event>,
         listener: mpsc::Sender<Duration>,
-    ) -> Result<Self> {
-        let mut transport = tarpc::serde_transport::tcp::connect(
-            config.diagnosis_server_endpoint,
-            formats::Bincode::default,
-        );
-        transport.config_mut().max_frame_length(usize::MAX);
-        let transport = transport.await.context(format!(
-            "Error creating TCP Bincode connect with diagnosis server at {:?}",
-            config.diagnosis_server_endpoint,
-        ))?;
-        let diagnosis_server_client =
-            rpcs::DiagnosisServerClient::new(client::Config::default(), transport)
-                .spawn()
-                .context("Error spawning diagnosis server client")?;
-        Ok(Self {
+    ) -> Self {
+        Self {
             participant: config.participant,
             system_params: config.params,
             keys: config.state.keys,
@@ -71,8 +60,8 @@ impl ClientState {
             computations: HashMap::new(),
             requests,
             listener,
-            diagnosis_server_client,
-        })
+            diagnosis_server,
+        }
     }
     pub async fn run(mut self) -> ! {
         self.init().await.unwrap(); // error handling missing
@@ -113,7 +102,7 @@ impl ClientState {
                 .await
                 .unwrap();
             let computation_id = self // retry strategy missing
-                .diagnosis_server_client
+                .diagnosis_server
                 .blacklist_upload(context::current(), BlacklistUploadParams { diagnosis_keys })
                 .await?;
             match self
@@ -165,7 +154,7 @@ impl ClientState {
         computation_id: ComputationId,
     ) -> Result<()> {
         let tek_keyring = Validity::<TekKeyring>::try_from(tek)
-            .context(format!("Error deriving derive RPIK and AEK from {:?}", tek))?;
+            .context(format!("Error deriving RPIK and AEK from {:?}", tek))?;
         let matched = match self.bluetooth_layer.match_with(tek_keyring) {
             Some(matched) => matched,
             None => return Ok(()),
@@ -244,7 +233,7 @@ impl ClientState {
         let predecessor_tek = params.predecessor_tek(tekrp);
         let predecessor_tek_keyring = Validity::<TekKeyring>::try_from(predecessor_tek.clone())
             .context(format!(
-                "Error deriving derive RPIK and AEK from {:?}",
+                "Error deriving RPIK and AEK from {:?}",
                 predecessor_tek
             ))?;
         let matched = match self.bluetooth_layer.match_with(predecessor_tek_keyring) {
@@ -298,7 +287,7 @@ impl ClientState {
                 "Announcing to greylist on diagnosis server {:?}",
                 origin_tek
             );
-            self.diagnosis_server_client // retry strategy missing
+            self.diagnosis_server // retry strategy missing
                 .greylist_upload(
                     context::current(),
                     GreylistUploadParams {

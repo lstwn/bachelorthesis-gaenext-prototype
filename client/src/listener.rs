@@ -55,11 +55,14 @@ impl Listener {
             match next_timeout {
                 Some(next_timeout) => {
                     timeout = next_timeout;
-                    logger::info!("Renewing listen for next {:?}", timeout);
+                    logger::info!(
+                        "Extending to listen for forwardable TEKs for next {:?}",
+                        timeout
+                    );
                     continue;
                 }
                 None => {
-                    logger::info!("Stopping listen");
+                    logger::info!("Stopping to listen for forwardable TEKs");
                     break;
                 }
             }
