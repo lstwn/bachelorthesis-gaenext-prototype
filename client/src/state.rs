@@ -205,12 +205,12 @@ impl ClientState {
                 logger::warn!(
                     "WARNING: participant had a high-risk traced contact with an infected participant"
                 ); // TODO: when? From<ExposureTime> for DateTime<Utc>
+                self.traced_contact = true;
             } else {
                 logger::warn!(
                     "WARNING: participant had a low-risk traced contact with an infected participant"
                 );
             }
-            self.traced_contact = true;
         }
         if matched.high_risk().is_empty() {
             logger::info!(
