@@ -26,10 +26,10 @@ social_graph:
     - name: p2
       positively_tested: false
       to_be_warned: false
-    - name: p1p
+    - name: p3
       positively_tested: false
       to_be_warned: false
-    - name: p0p
+    - name: p4
       positively_tested: true
       to_be_warned: false
   node_holes: []
