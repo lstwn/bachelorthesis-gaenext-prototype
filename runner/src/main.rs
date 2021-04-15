@@ -17,22 +17,29 @@ fn main() -> Result<()> {
     println!("Building the project in release mode\n{}", DIVIDER);
     let exit_status = build_project().context("Error spawning build process")?;
     if !exit_status.success() {
-        println!("{}\nError building the project in release mode, aborting", DIVIDER);
+        println!(
+            "{}\nError building the project in release mode, aborting",
+            DIVIDER
+        );
         std::process::exit(exit_status.code().unwrap_or(1));
     }
     println!(
         "{}\nAssuming you have run the configurator beforehand and that the generated \
         (and up-to-date) configurations are present in {:?}",
-        DIVIDER,
-        args.config_files_path
+        DIVIDER, args.config_files_path
     );
     println!("Press CTRL+C to stop diagnosis server and all clients");
     println!(
         "All logs will appear in this terminal (not necessarily chronologically ordered!) \
         or alternatively per binary in the {:?} folder\n{}",
-        args.log_files_path,
-        DIVIDER
+        args.log_files_path, DIVIDER
     );
+    if args.log_files_path.exists() {
+        fs::remove_dir_all(&args.log_files_path).context(format!(
+            "Error cleaning log files path {:?}",
+            args.log_files_path
+        ))?;
+    }
     fs::create_dir_all(&args.log_files_path)?;
 
     let (output_tx, output_rx) = unbounded::<String>();
@@ -59,8 +66,7 @@ fn main() -> Result<()> {
                     println!(
                         "{}\nReceived SIGINT signal ({}), \
                         shutting down clients and diagnosis server..",
-                        DIVIDER,
-                        signal
+                        DIVIDER, signal
                     );
                     termination_request_tx.send(()).unwrap();
                 }
@@ -153,15 +159,13 @@ fn monitor_subprocess(
         let stderr = child.stderr.take().unwrap();
         let mut stderr = BufReader::new(stderr);
         loop {
-            // TODO: batched read instead of line by line read
             if !channels.termination_request_rx.is_empty() {
                 break;
             }
             let mut output_line = String::new();
             let bytes = stderr.read_line(&mut output_line).unwrap();
             if bytes == 0 {
-                // update rate for new logs after an EOF
-                // (i.e. a logging break)
+                // update rate for new logs after an EOF (i.e. a logging break)
                 thread::sleep(Duration::from_millis(log_refresh_rate));
                 continue;
             }
