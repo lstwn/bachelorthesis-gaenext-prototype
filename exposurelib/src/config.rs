@@ -26,6 +26,8 @@ pub struct Participant {
     pub name: String,
     #[serde(default = "Participant::default_positively_tested")]
     pub positively_tested: bool,
+    #[serde(default = "Participant::default_to_be_warned")]
+    pub to_be_warned: bool,
 }
 
 impl Participant {
@@ -33,10 +35,23 @@ impl Participant {
         Participant {
             name: name.into(),
             positively_tested,
+            to_be_warned: Self::default_to_be_warned(),
         }
     }
     fn default_positively_tested() -> bool {
         false
+    }
+    fn default_to_be_warned() -> bool {
+        false
+    }
+    pub fn positively_tested(&self) -> bool {
+        self.positively_tested
+    }
+    pub fn to_be_warned(&self) -> bool {
+        self.to_be_warned
+    }
+    pub fn set_to_be_warned(&mut self) -> () {
+        self.to_be_warned = true;
     }
 }
 
@@ -210,8 +225,5 @@ impl ClientConfig {
     }
     pub fn name(&self) -> &str {
         &self.participant.name
-    }
-    pub fn is_positively_tested(&self) -> bool {
-        self.participant.positively_tested
     }
 }

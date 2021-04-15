@@ -1,105 +1,78 @@
-use crate::{handler::ConnectionHandler, state::ClientState};
+use crate::state::Event;
 use anyhow::{Context, Result};
 use exposurelib::logger;
-use exposurelib::{config::ComputationPeriod, rpcs::Forwarder};
+use exposurelib::rpcs::{ForwardParams, Forwarder};
 use futures::{future, prelude::*};
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
 use tarpc::server::{self, Channel, Incoming};
 use tarpc::tokio_serde::formats;
 use tokio::sync::mpsc;
-use tokio::sync::Mutex;
-use tokio::task;
+use tokio::sync::oneshot;
 use tokio::time;
 
-pub struct ForwarderServer {
+pub struct Listener {
     address: SocketAddr,
-    timeout: ComputationPeriod,
-    listening: Mutex<Option<mpsc::Sender<()>>>,
+    requests: mpsc::Receiver<Duration>,
+    client_state: mpsc::Sender<Event>,
 }
 
-impl ForwarderServer {
+impl Listener {
     pub fn new(
         address: SocketAddr,
-        timeout: ComputationPeriod,
-    ) -> Arc<Self> {
-        Arc::new(Self {
+        requests: mpsc::Receiver<Duration>,
+        client_state: mpsc::Sender<Event>,
+    ) -> Self {
+        Self {
             address,
-            timeout,
-            listening: Mutex::new(None),
-        })
-    }
-    pub async fn request(self: Arc<Self>, client_state: Arc<ClientState>) -> () {
-        let listening = self.listening.lock().await.is_some();
-        if !listening {
-            self.start(client_state).await;
-        } else {
-            self.extend().await;
+            requests,
+            client_state,
         }
     }
-    async fn start(self: Arc<Self>, client_state: Arc<ClientState>) -> () {
-        let (tx, rx) = mpsc::channel(100);
-        {
-            let mut listening = self.listening.lock().await;
-            *listening = Some(tx);
-        };
-        let task_self = Arc::clone(&self);
-        task::spawn(async move {
-            let result = tokio::select! {
-                result1 = Arc::clone(&task_self).timeout(rx) => result1,
-                result2 = Arc::clone(&task_self).listen(client_state) => result2,
-            };
-            match result {
-                Ok(_) => {
-                    let mut listening = task_self.listening.lock().await;
-                    *listening = None;
-                }
-                Err(e) => {
-                    logger::error!("{}", e);
-                }
-            }
-        });
-    }
-    async fn extend(self: Arc<Self>) -> () {
-        match self
-            .listening
-            .lock()
-            .await
-            .as_mut()
-            .expect("ForwarderServer should already be listening when extend() is called")
-            .send(())
-            .await
-        {
-            Ok(_) => logger::info!("Issueing new request to restart computation timeout"),
-            Err(_) => logger::info!("Too late to issue a request to restart computation timeout"),
-        }
-    }
-    async fn timeout(self: Arc<Self>, mut rx: mpsc::Receiver<()>) -> Result<()> {
+    pub async fn run(mut self) -> ! {
         loop {
-            time::sleep(Duration::from(self.timeout)).await;
-            match futures::future::poll_fn(|cx| rx.poll_recv(cx)).await {
-                Some(_) => {
-                    // debug hint: hopefully poll_recv() *does* consume
-                    // the value from the channel..
-                    logger::info!("Restarting computation timeout due to new request");
+            let duration = self.requests.recv().await.unwrap();
+            let address = self.address;
+            let client_state = self.client_state.clone();
+            let listener_result = tokio::select! {
+                _ = self.timeout(duration) => Ok(()),
+                result = Self::listen(address, client_state) => result,
+            };
+            if let Err(e) = listener_result {
+                logger::warn!("Error spawning listener: {}", e);
+            }
+        }
+    }
+    async fn timeout(&mut self, mut timeout: Duration) -> () {
+        loop {
+            let next_timeout = tokio::select! {
+                _ = time::sleep(timeout) => None,
+                next_timeout = self.requests.recv() => next_timeout,
+            };
+            match next_timeout {
+                Some(next_timeout) => {
+                    timeout = next_timeout;
+                    logger::info!(
+                        "Extending to listen for forwardable TEKs for next {:?}",
+                        timeout
+                    );
                     continue;
                 }
                 None => {
-                    logger::info!("Computation timeout expired, shutting down ForwardServer");
-                    return Ok(());
+                    logger::info!("Stopping to listen for forwardable TEKs");
+                    self.client_state.send(Event::ComputationPeriodExpired).await.unwrap();
+                    break;
                 }
-            };
+            }
         }
     }
-    pub async fn listen(self: Arc<Self>, client_state: Arc<ClientState>) -> Result<()> {
-        let mut listener =
-            tarpc::serde_transport::tcp::listen(&self.address, formats::Bincode::default)
-                .await
-                .context("Error creating TCP Bincode listener")?;
+    pub async fn listen(address: SocketAddr, client_state: mpsc::Sender<Event>) -> Result<()> {
+        let mut listener = tarpc::serde_transport::tcp::listen(&address, formats::Bincode::default)
+            .await
+            .context("Error creating TCP Bincode listener")?;
         listener.config_mut().max_frame_length(usize::MAX);
 
-        logger::info!("Starting to listen for forwardable TEKs at {:?} for at least {:?}", self.address, self.timeout);
+        logger::info!("Starting to listen for forwardable TEKs at {:?}", address);
 
         listener
             // ignore accept errors
@@ -110,9 +83,9 @@ impl ForwarderServer {
             // function serve() is generated by the service attribute
             // it takes as input any type implementing the generated service trait
             .map(|channel| {
-                let server = ConnectionHandler::new(
+                let server = Handler::new(
                     channel.as_ref().as_ref().peer_addr().unwrap(),
-                    Arc::clone(&client_state),
+                    client_state.clone(),
                 );
                 channel.requests().execute(server.serve())
             })
@@ -122,5 +95,40 @@ impl ForwarderServer {
             .await;
 
         Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct Handler {
+    peer_addr: SocketAddr,
+    client_state: mpsc::Sender<Event>,
+}
+
+impl Handler {
+    pub fn new(peer_addr: SocketAddr, client_state: mpsc::Sender<Event>) -> Self {
+        Self {
+            peer_addr,
+            client_state,
+        }
+    }
+}
+
+#[tarpc::server]
+impl Forwarder for Handler {
+    async fn forward(self, context: tarpc::context::Context, params: ForwardParams) -> () {
+        logger::trace!(
+            "New forward() RPC from {:?} with context {:?} and params {:?}",
+            self.peer_addr,
+            context,
+            params
+        );
+        let (tx, rx) = oneshot::channel();
+        self.client_state
+            .send(Event::NewForwardRequest { params, resp: tx })
+            .await
+            .unwrap();
+        if let Err(e) = rx.await {
+            logger::warn!("Error while forwarding TEK: {:?}", e);
+        }
     }
 }
