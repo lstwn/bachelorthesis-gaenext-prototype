@@ -14,6 +14,7 @@
 ├── client           // crate 3: GAENEXT client
 ├── diagnosisserver  // crate 4: GAENEXT diagnosis server
 ├── exposurelib      // crate 5: shared library with primitives etc.
+├── preconfigured    // contains some preconfigured settings demonstrating special capabilities
 ├── logs             // generated folder for logs
 ├── configs          // generated folder for configs
 ```
@@ -38,17 +39,23 @@ cargo run --release --bin runner
 All binaries come with a cli interface.
 Check `cargo run --release --bin <binary> -- --help` for cli argument help.
 
-For playing around with different setups, i.e., graphs, I recommend to
-run `cargo run --release --bin configurator -- emit-default-config`
-and then modify the config in `configs/configurator.yaml`.
-Alternatively, open `configurator/src/config.rs` and modify the default
-config with the given helper functions directly in Rust and then use
-`cargo run --release --bin configurator -- emit-default-config` to spit out
-the new "default" config.
+For playing around with different setups, i.e., graphs, I recommend three different options:
 
-Afterward, run `cargo run --release --bin configurator -- generate-configs`
-to generate the client configs and diagnosis server config from the
-`configs/configurator.yaml` file.
+1. Run `cargo run --release --bin configurator -- emit-default-config`
+   and then modify the config in `configs/configurator.yaml`.
+   Afterward, run `cargo run --release --bin configurator -- generate-configs`
+   to generate the client configs and diagnosis server config from the
+   `configs/configurator.yaml` file.
+2. Alternatively, open `configurator/src/config.rs` and modify the default
+   config with the given helper functions directly in Rust and then use
+   `cargo run --release --bin configurator -- emit-default-config` to spit out
+   the new "default" config.
+   Afterward, run `cargo run --release --bin configurator -- generate-configs`
+   to generate the client configs and diagnosis server config from the
+   `configs/configurator.yaml` file.
+3. The preconfigured configs in the `preconfigured` folder can be used via
+   `cargo run --release --bin configurator -- generate-configs --config=<path-to-yaml-config>`
+
 Finally, use `cargo run --release --bin runner` to start the diagnosis server
 and all clients locally on your machine.
 Logs will be written into the `logs` folder and appear on your terminal.
@@ -110,6 +117,7 @@ if the prototype did catch the right set of participants for the given
 configuration.
 Just watch the logs after the computation period elapsed and enjoy your
 coffee in the meantime :)
+See `configurator/src/verification.rs` for the graph search performed upfront.
 
 ### Disclaimer
 
